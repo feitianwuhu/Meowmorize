@@ -24,6 +24,7 @@ import com.meowmorize.core.domain.plan.PlanDraft
 import com.meowmorize.core.domain.repository.PlanInputs
 import com.meowmorize.core.domain.repository.PlanRepository
 import com.meowmorize.core.domain.srs.FsrsScheduler
+import com.meowmorize.core.domain.srs.SrsConfig
 import com.meowmorize.core.model.DailyPlan
 import com.meowmorize.core.model.LearningPhase
 import com.meowmorize.core.model.PlanReason
@@ -103,6 +104,11 @@ class PlanRepositoryImpl @Inject constructor(
                 minutes = item.estimatedMinutes,
             )
         }
+    }
+
+    override suspend fun todayReviewCount(itemId: Long, now: Instant): Int {
+        val start = timeProvider.startOfDay(timeProvider.today()).toEpochMilli()
+        return logDao.countBetween(itemId, start, now.toEpochMilli())
     }
 
     override fun observeReviewState(itemId: Long): Flow<ReviewState?> =
@@ -212,11 +218,13 @@ class PlanRepositoryImpl @Inject constructor(
         grade: RecallGrade,
         now: Instant,
         targetRetention: Double,
+        config: SrsConfig,
     ): ReviewOutcome {
         return database.withTransaction {
             val current = stateDao.getByItem(itemId)?.toModel()
             val item = itemDao.getById(itemId)
             val todayStart = timeProvider.startOfDay(timeProvider.today()).toEpochMilli()
+            // 语义是「今天已经评过几次」，0 表示今天第一次
             val todayReviewCount = logDao.countBetween(itemId, todayStart, now.toEpochMilli())
             val outcome = scheduler.review(
                 state = current,
@@ -225,6 +233,7 @@ class PlanRepositoryImpl @Inject constructor(
                 targetRetention = targetRetention,
                 itemId = itemId,
                 todayReviewCount = todayReviewCount,
+                config = config,
             )
             stateDao.upsert(outcome.state.toEntity())
             logDao.insert(

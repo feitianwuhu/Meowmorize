@@ -60,6 +60,13 @@ class SettingsRepositoryImpl @Inject constructor(
             librarySortOrder = TaskSortOrder.fromName(this[Keys.LIBRARY_SORT]),
             appStyle = AppStyle.fromName(this[Keys.APP_STYLE]),
             onboarded = this[Keys.ONBOARDED] ?: defaults.onboarded,
+            maxIntervalDays = this[Keys.MAX_INTERVAL_DAYS] ?: defaults.maxIntervalDays,
+            intervalFuzzEnabled = this[Keys.INTERVAL_FUZZ] ?: defaults.intervalFuzzEnabled,
+            leechThreshold = this[Keys.LEECH_THRESHOLD] ?: defaults.leechThreshold,
+            difficultyReversion = this[Keys.DIFFICULTY_REVERSION] ?: defaults.difficultyReversion,
+            sameDayRepeatLimit = this[Keys.SAME_DAY_REPEAT] ?: defaults.sameDayRepeatLimit,
+            overdueMaxBonus = this[Keys.OVERDUE_BONUS] ?: defaults.overdueMaxBonus,
+            deadlineRampDays = this[Keys.DEADLINE_RAMP_DAYS] ?: defaults.deadlineRampDays,
         ).sanitized()
     }
 
@@ -75,6 +82,13 @@ class SettingsRepositoryImpl @Inject constructor(
         this[Keys.LIBRARY_SORT] = settings.librarySortOrder.name
         this[Keys.APP_STYLE] = settings.appStyle.name
         this[Keys.ONBOARDED] = settings.onboarded
+        this[Keys.MAX_INTERVAL_DAYS] = settings.maxIntervalDays
+        this[Keys.INTERVAL_FUZZ] = settings.intervalFuzzEnabled
+        this[Keys.LEECH_THRESHOLD] = settings.leechThreshold
+        this[Keys.DIFFICULTY_REVERSION] = settings.difficultyReversion
+        this[Keys.SAME_DAY_REPEAT] = settings.sameDayRepeatLimit
+        this[Keys.OVERDUE_BONUS] = settings.overdueMaxBonus
+        this[Keys.DEADLINE_RAMP_DAYS] = settings.deadlineRampDays
     }
 
     private fun UserSettings.sanitized(): UserSettings = copy(
@@ -87,6 +101,30 @@ class SettingsRepositoryImpl @Inject constructor(
         calendarSyncWindowHours = calendarSyncWindowHours.coerceIn(
             UserSettings.MIN_SYNC_WINDOW_HOURS,
             UserSettings.MAX_SYNC_WINDOW_HOURS,
+        ),
+        maxIntervalDays = maxIntervalDays.coerceIn(
+            UserSettings.MIN_MAX_INTERVAL_DAYS,
+            UserSettings.MAX_MAX_INTERVAL_DAYS,
+        ),
+        leechThreshold = leechThreshold.coerceIn(
+            UserSettings.MIN_LEECH_THRESHOLD,
+            UserSettings.MAX_LEECH_THRESHOLD,
+        ),
+        difficultyReversion = difficultyReversion.coerceIn(
+            UserSettings.MIN_DIFFICULTY_REVERSION,
+            UserSettings.MAX_DIFFICULTY_REVERSION,
+        ),
+        sameDayRepeatLimit = sameDayRepeatLimit.coerceIn(
+            UserSettings.MIN_SAME_DAY_REPEAT,
+            UserSettings.MAX_SAME_DAY_REPEAT,
+        ),
+        overdueMaxBonus = overdueMaxBonus.coerceIn(
+            UserSettings.MIN_OVERDUE_BONUS,
+            UserSettings.MAX_OVERDUE_BONUS,
+        ),
+        deadlineRampDays = deadlineRampDays.coerceIn(
+            UserSettings.MIN_DEADLINE_RAMP_DAYS,
+            UserSettings.MAX_DEADLINE_RAMP_DAYS,
         ),
     )
 
@@ -102,5 +140,12 @@ class SettingsRepositoryImpl @Inject constructor(
         val ONBOARDED = booleanPreferencesKey("onboarded")
         val CALENDAR_SYNC_ENABLED = booleanPreferencesKey("calendar_sync_enabled")
         val CALENDAR_SYNC_WINDOW = intPreferencesKey("calendar_sync_window_hours")
+        val MAX_INTERVAL_DAYS = intPreferencesKey("srs_max_interval_days")
+        val INTERVAL_FUZZ = booleanPreferencesKey("srs_interval_fuzz")
+        val LEECH_THRESHOLD = intPreferencesKey("srs_leech_threshold")
+        val DIFFICULTY_REVERSION = doublePreferencesKey("srs_difficulty_reversion")
+        val SAME_DAY_REPEAT = intPreferencesKey("srs_same_day_repeat_limit")
+        val OVERDUE_BONUS = doublePreferencesKey("srs_overdue_bonus")
+        val DEADLINE_RAMP_DAYS = intPreferencesKey("srs_deadline_ramp_days")
     }
 }

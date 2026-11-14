@@ -8,6 +8,7 @@ import com.meowmorize.core.model.ReviewState
 import com.meowmorize.core.domain.plan.NewCandidate
 import com.meowmorize.core.domain.plan.DueCandidate
 import com.meowmorize.core.domain.plan.PlanDraft
+import com.meowmorize.core.domain.srs.SrsConfig
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
@@ -57,7 +58,14 @@ interface PlanRepository {
         grade: RecallGrade,
         now: Instant,
         targetRetention: Double,
+        config: SrsConfig = SrsConfig(),
     ): ReviewOutcome
+
+    /**
+     * 今天已经评过几次。复习页用它预览间隔——
+     * 没有这个数字，第 3 次「忘了」的预览会显示 10 分钟，实际却排到次日。
+     */
+    suspend fun todayReviewCount(itemId: Long, now: Instant): Int
 
     /** 最近 N 天的完成率（不含 [date] 当天），用于自适应容量。 */
     suspend fun recentCompletionRatios(date: LocalDate, days: Int = 7): List<Float>

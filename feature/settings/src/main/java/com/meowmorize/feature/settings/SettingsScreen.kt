@@ -80,6 +80,12 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         onStyleChange = viewModel::setAppStyle,
         onRegeneratePlan = viewModel::regenerateTodayPlan,
         onDismissMessage = viewModel::dismissMessage,
+        onMaxIntervalChange = viewModel::setMaxIntervalDays,
+        onFuzzChange = viewModel::setIntervalFuzz,
+        onLeechThresholdChange = viewModel::setLeechThreshold,
+        onDifficultyReversionChange = viewModel::setDifficultyReversion,
+        onSameDayRepeatChange = viewModel::setSameDayRepeatLimit,
+        onResetAlgorithm = viewModel::resetAlgorithmDefaults,
         onAdvanceClock = viewModel::advanceByDays,
         onJumpToDateTime = viewModel::jumpTo,
         onResetClock = viewModel::resetClock,
@@ -111,6 +117,12 @@ fun SettingsScreen(
     onStyleChange: (AppStyle) -> Unit,
     onRegeneratePlan: () -> Unit,
     onDismissMessage: () -> Unit,
+    onMaxIntervalChange: (Int) -> Unit,
+    onFuzzChange: (Boolean) -> Unit,
+    onLeechThresholdChange: (Int) -> Unit,
+    onDifficultyReversionChange: (Double) -> Unit,
+    onSameDayRepeatChange: (Int) -> Unit,
+    onResetAlgorithm: () -> Unit,
     onAdvanceClock: (Long) -> Unit,
     onJumpToDateTime: (LocalDate, Int, Int) -> Unit,
     onResetClock: () -> Unit,
@@ -221,6 +233,80 @@ fun SettingsScreen(
                         onCheckedChange = onWeekendChange,
                         icon = Icons.Rounded.Weekend,
                     )
+                }
+            }
+
+            item {
+                MeowCard {
+                    SectionHeader(
+                        title = "复习算法",
+                        subtitle = "改完下一次评分就生效，不会重算历史",
+                    )
+                    MeowSliderRow(
+                        title = "最长间隔",
+                        valueText = if (settings.maxIntervalDays >= 365) {
+                            "1 年"
+                        } else {
+                            "${settings.maxIntervalDays} 天"
+                        },
+                        value = settings.maxIntervalDays.toFloat(),
+                        onValueChange = { onMaxIntervalChange(it.toInt()) },
+                        valueRange = 30f..365f,
+                        description = "再熟的内容也会在这个期限内再见一次；设短一些更适合应付考试",
+                    )
+                    MeowDivider()
+                    MeowSliderRow(
+                        title = "同日重练上限",
+                        valueText = "${settings.sameDayRepeatLimit} 次",
+                        value = settings.sameDayRepeatLimit.toFloat(),
+                        onValueChange = { onSameDayRepeatChange(it.toInt()) },
+                        valueRange = 1f..5f,
+                        steps = 3,
+                        description = "一天内反复「忘了」超过这个次数，就冷却 6 小时再来，避免硬耗",
+                    )
+                    MeowDivider()
+                    MeowSliderRow(
+                        title = "难度回归强度",
+                        valueText = String.format(java.util.Locale.CHINA, "%.3f", settings.difficultyReversion),
+                        value = settings.difficultyReversion.toFloat(),
+                        onValueChange = { onDifficultyReversionChange(it.toDouble()) },
+                        valueRange = 0f..0.2f,
+                        description = "越大越容易把难度拉回「较简单」，长期记得的内容会更早复习完",
+                    )
+                    MeowDivider()
+                    MeowSwitchRow(
+                        title = "间隔抖动",
+                        description = "同一批内容不再同一天到期，代价是间隔不再精确可预期",
+                        checked = settings.intervalFuzzEnabled,
+                        onCheckedChange = onFuzzChange,
+                        icon = Icons.Rounded.AutoAwesome,
+                    )
+                    MeowDivider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "反复遗忘提示阈值",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = "遗忘 ${settings.leechThreshold} 次后标记为「反复遗忘」，建议改写或拆分",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        MeowStepper(
+                            value = settings.leechThreshold,
+                            onValueChange = onLeechThresholdChange,
+                            min = UserSettings.MIN_LEECH_THRESHOLD,
+                            max = UserSettings.MAX_LEECH_THRESHOLD,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    MeowTextButton(text = "恢复算法默认值", onClick = onResetAlgorithm)
                 }
             }
 

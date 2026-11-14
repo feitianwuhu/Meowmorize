@@ -8,6 +8,7 @@ import com.meowmorize.core.domain.repository.PlanRepository
 import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.domain.repository.StudyRepository
 import com.meowmorize.core.domain.srs.FsrsScheduler
+import com.meowmorize.core.domain.srs.SrsPolicy
 import com.meowmorize.core.domain.usecase.GradeReviewUseCase
 import com.meowmorize.core.model.MemorizeItem
 import com.meowmorize.core.model.RecallGrade
@@ -75,18 +76,30 @@ class ReviewViewModel @Inject constructor(
 
     private val local = MutableStateFlow(LocalState())
 
+    /** 当日已评次数：影响同日步进，因此预览必须用它，否则按钮显示与实际落库不一致。 */
+    private val todayCount = MutableStateFlow(0)
+
+    // combine 的 lambda 重载最多 5 个流，这里把「界面态 + 当日次数」先合成一个
+    private val mutationAndCount = combine(local, todayCount) { mutation, count -> mutation to count }
+
     val uiState: StateFlow<ReviewUiState> = combine(
         studyRepository.observeItem(itemId),
         studyRepository.observeSubjects(),
         planRepository.observeReviewState(itemId),
         settingsRepository.settings,
-        local,
-    ) { item, subjects, state, settings, mutation ->
+        mutationAndCount,
+    ) { item, subjects, state, settings, (mutation, reviewedToday) ->
         ReviewUiState(
             item = item,
             subject = item?.subjectId?.let { id -> subjects.firstOrNull { it.id == id } },
             state = state,
-            previews = scheduler.previewIntervals(state, timeProvider.now(), settings.targetRetention),
+            previews = scheduler.previewIntervals(
+                state = state,
+                now = timeProvider.now(),
+                targetRetention = settings.targetRetention,
+                todayReviewCount = reviewedToday,
+                config = SrsPolicy.from(settings),
+            ),
             revealed = mutation.revealed,
             hintVisible = mutation.hintVisible,
             hintUsed = mutation.hintUsed,
@@ -100,6 +113,12 @@ class ReviewViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ReviewUiState(),
     )
+
+    init {
+        viewModelScope.launch {
+            todayCount.value = planRepository.todayReviewCount(itemId, timeProvider.now())
+        }
+    }
 
     /** 主动展开答案（不看评分）。 */
     fun reveal() {
@@ -125,6 +144,8 @@ class ReviewViewModel @Inject constructor(
             runCatching { gradeReview(itemId, grade) }
                 .onSuccess { outcome ->
                     local.value = local.value.copy(saving = false, outcome = outcome)
+                    // 评完一次，预览要按新的次数重算
+                    todayCount.value = planRepository.todayReviewCount(itemId, timeProvider.now())
                 }
                 .onFailure {
                     local.value = local.value.copy(saving = false, message = "保存失败，请稍后再试")

@@ -3,6 +3,7 @@ package com.meowmorize.core.domain.usecase
 import com.meowmorize.core.common.time.TimeProvider
 import com.meowmorize.core.domain.repository.PlanRepository
 import com.meowmorize.core.domain.repository.SettingsRepository
+import com.meowmorize.core.domain.srs.SrsPolicy
 import com.meowmorize.core.model.RecallGrade
 import com.meowmorize.core.model.ReviewOutcome
 
@@ -20,6 +21,8 @@ class GradeReviewUseCase(
             grade = grade,
             now = timeProvider.now(),
             targetRetention = settings.targetRetention,
+            // 与实际评分同一份参数，否则设置里的调整只在「下一次」生效，用户会觉得没反应
+            config = SrsPolicy.from(settings),
         )
         // 背完后该任务已移出「未来 24 小时」，顺手把日历里的对应事件撤掉
         runCatching { syncCalendar() }

@@ -40,6 +40,24 @@ data class UserSettings(
     val librarySortOrder: TaskSortOrder = TaskSortOrder.RECENT_UPDATED,
     /** 是否已完成新手引导（用于首次进入时插入示例数据说明）。 */
     val onboarded: Boolean = false,
+
+    // ---------- 复习算法可调参数 ----------
+    // 这些值都直接进入 FSRS 排程，改完下一次评分就生效，不需要重建数据。
+
+    /** 最长复习间隔（天）。S 仍会增长，只是产品上不排到更远。 */
+    val maxIntervalDays: Int = 365,
+    /** 是否对间隔做确定性抖动（同一批内容不再同日到期）。默认关闭。 */
+    val intervalFuzzEnabled: Boolean = false,
+    /** 连续遗忘多少次后标记为 leech（需要改写或拆分）。 */
+    val leechThreshold: Int = 4,
+    /** 难度均值回归强度：越大越「健忘」，越容易把难度拉回容易档。 */
+    val difficultyReversion: Double = 0.031,
+    /** 同一条内容一天最多评几次；超过后「忘了」不再当天重练。 */
+    val sameDayRepeatLimit: Int = 3,
+    /** 逾期后成功回忆的稳定性奖励上限（0.10 = 最多 +10%）。 */
+    val overdueMaxBonus: Double = 0.10,
+    /** 考试/截止日冲刺窗口（天）：进入窗口后自动提高目标保持率。 */
+    val deadlineRampDays: Int = 30,
 ) {
     companion object {
         const val MIN_CAPACITY_MINUTES = 5
@@ -50,5 +68,17 @@ data class UserSettings(
         const val MAX_RETENTION = 0.97
         const val MIN_SYNC_WINDOW_HOURS = 1
         const val MAX_SYNC_WINDOW_HOURS = 24 * 30
+        const val MIN_MAX_INTERVAL_DAYS = 30
+        const val MAX_MAX_INTERVAL_DAYS = 365
+        const val MIN_LEECH_THRESHOLD = 3
+        const val MAX_LEECH_THRESHOLD = 10
+        const val MIN_DIFFICULTY_REVERSION = 0.0
+        const val MAX_DIFFICULTY_REVERSION = 0.20
+        const val MIN_SAME_DAY_REPEAT = 1
+        const val MAX_SAME_DAY_REPEAT = 5
+        const val MIN_DEADLINE_RAMP_DAYS = 10
+        const val MAX_DEADLINE_RAMP_DAYS = 60
+        const val MIN_OVERDUE_BONUS = 0.0
+        const val MAX_OVERDUE_BONUS = 0.30
     }
 }

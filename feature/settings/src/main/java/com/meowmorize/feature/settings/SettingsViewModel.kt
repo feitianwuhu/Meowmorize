@@ -104,6 +104,36 @@ class SettingsViewModel @Inject constructor(
 
     fun setAppStyle(style: AppStyle) = updateSettings { it.copy(appStyle = style) }
 
+    // ---------- 复习算法 ----------
+
+    // 算法参数不影响「今天排多少」，因此只写设置、不重排计划：
+    // 拖滑杆时若每次都重算，会明显卡顿。
+
+    fun setMaxIntervalDays(days: Int) = updateAlgorithm { it.copy(maxIntervalDays = days) }
+
+    fun setIntervalFuzz(enabled: Boolean) = updateAlgorithm { it.copy(intervalFuzzEnabled = enabled) }
+
+    fun setLeechThreshold(count: Int) = updateAlgorithm { it.copy(leechThreshold = count) }
+
+    fun setDifficultyReversion(value: Double) = updateAlgorithm { it.copy(difficultyReversion = value) }
+
+    fun setSameDayRepeatLimit(count: Int) = updateAlgorithm { it.copy(sameDayRepeatLimit = count) }
+
+    fun setDeadlineRampDays(days: Int) = updateAlgorithm { it.copy(deadlineRampDays = days) }
+
+    /** 一键恢复算法默认值：改坏了能回来，用户才敢试。 */
+    fun resetAlgorithmDefaults() = updateAlgorithm {
+        it.copy(
+            maxIntervalDays = 365,
+            intervalFuzzEnabled = false,
+            leechThreshold = 4,
+            difficultyReversion = 0.031,
+            sameDayRepeatLimit = 3,
+            overdueMaxBonus = 0.10,
+            deadlineRampDays = 30,
+        )
+    }
+
     fun regenerateTodayPlan() {
         viewModelScope.launch {
             local.value = local.value.copy(message = "正在重新计算…")
@@ -227,6 +257,13 @@ class SettingsViewModel @Inject constructor(
         result.permissionDenied -> "没有日历权限，请先授权"
         result.failed -> "系统日历不可用，同步失败"
         else -> "$fallback：${result.synced} 条已同步，${result.removed} 条已移除"
+    }
+
+    private fun updateAlgorithm(transform: (UserSettings) -> UserSettings) {
+        viewModelScope.launch {
+            runCatching { settingsRepository.update(transform) }
+                .onFailure { local.value = local.value.copy(message = "设置保存失败") }
+        }
     }
 
     private fun updateSettings(transform: (UserSettings) -> UserSettings) {
