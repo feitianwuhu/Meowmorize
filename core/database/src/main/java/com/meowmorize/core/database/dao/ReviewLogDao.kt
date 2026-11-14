@@ -23,4 +23,8 @@ interface ReviewLogDao {
 
     @Query("SELECT COUNT(*) FROM review_logs WHERE itemId = :itemId")
     suspend fun countForItem(itemId: Long): Int
+
+    /** 当日评分次数：用于同日重练的步进与上限（零迁移）。 */
+    @Query("SELECT COUNT(*) FROM review_logs WHERE itemId = :itemId AND reviewedAt BETWEEN :startMillis AND :endMillis")
+    suspend fun countBetween(itemId: Long, startMillis: Long, endMillis: Long): Int
 }

@@ -81,17 +81,20 @@ class TodayPlanGenerator {
         val baseCapacity = request.settings.dailyCapacityMinutes
             .coerceIn(UserSettings.MIN_CAPACITY_MINUTES, UserSettings.MAX_CAPACITY_MINUTES)
 
-        // 用户手动设定容量时，以用户的数字为准，不再叠加自适应系数——
-        // 「我明明拖到 20 分钟，你却排了 26 分钟」是最容易让人失去信任的细节。
+        // 用户手动设定容量时，以用户的数字为准；但仍要算出「算法推荐值」并解释，
+        // 否则手动一调，算法的判断就彻底失声了。
         val forcedCapacity = request.forcedCapacityMinutes
             ?.coerceIn(UserSettings.MIN_CAPACITY_MINUTES, UserSettings.MAX_CAPACITY_MINUTES)
 
         val elasticityFactor: Double
         val effectiveCapacity: Int
         if (forcedCapacity != null) {
+            val recommendedFactor = computeElasticityFactor(request, baseCapacity, mutableListOf())
+            val recommendedCapacity = (baseCapacity * recommendedFactor).roundToInt()
+                .coerceIn(UserSettings.MIN_CAPACITY_MINUTES, UserSettings.MAX_CAPACITY_MINUTES)
             elasticityFactor = forcedCapacity.toDouble() / baseCapacity.coerceAtLeast(1)
             effectiveCapacity = forcedCapacity
-            notes += "已按你设定的 $forcedCapacity 分钟安排今天的任务。"
+            notes += "已按你设定的 $forcedCapacity 分钟安排；算法推荐 $recommendedCapacity 分钟。"
         } else {
             elasticityFactor = computeElasticityFactor(request, baseCapacity, notes)
             effectiveCapacity = (baseCapacity * elasticityFactor).roundToInt()
@@ -99,10 +102,11 @@ class TodayPlanGenerator {
         }
 
         val dueMinutes = request.dueCandidates.sumOf { it.item.estimatedMinutes }
-        val hasBacklog = request.dueCandidates.size + request.newCandidates.size > 0 &&
-            dueMinutes > effectiveCapacity
+        val newDemandMinutes = request.newCandidates.sumOf { it.item.estimatedMinutes }
+        val hasBacklog = dueMinutes + newDemandMinutes > effectiveCapacity
 
-        // 复习配额：有积压时把 20% 容量留给新学，保证学习进度不中断。
+        // 复习配额：有积压时把 20% 容量留给新学。注意：逾期与今日到期共用这一配额，
+        // 旧实现让逾期任务用满容量，恰恰在最需要缓冲时把新学饿死。
         val reviewQuota = if (request.newCandidates.isNotEmpty() && hasBacklog) {
             (effectiveCapacity * 0.8).roundToInt()
         } else {
@@ -122,46 +126,75 @@ class TodayPlanGenerator {
 
         for (candidate in sortedDue) {
             val minutes = candidate.item.estimatedMinutes
-            val isOverdue = candidate.overdueDays > 0
-            val quota = if (isOverdue) effectiveCapacity else reviewQuota
-            if (usedMinutes + minutes <= quota) {
+            if (usedMinutes + minutes <= reviewQuota) {
                 selected += PlanTaskDraft(
                     itemId = candidate.item.id,
-                    reason = if (isOverdue) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
+                    reason = if (candidate.overdueDays > 0) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
                     minutes = minutes,
                 )
                 usedMinutes += minutes
             }
         }
 
-        // 极端情况：容量小于任意一个任务，也至少安排最紧急的一条，避免「今天没任务」的错觉。
+        // 容量连一条都装不下：选「分钟数最小」的逾期任务，而不是排序第一条，
+        // 让用户至少能完成一件事，而不是打开就看到一个 40 分钟的大山。
         if (selected.isEmpty() && sortedDue.isNotEmpty()) {
-            val first = sortedDue.first()
-            selected += PlanTaskDraft(first.item.id, PlanReason.OVERDUE, first.item.estimatedMinutes)
-            usedMinutes += first.item.estimatedMinutes
-            notes += "今天可用的时间很短，只保留了最紧急的一条，其余已顺延。"
+            val smallest = sortedDue.minBy { it.item.estimatedMinutes }
+            selected += PlanTaskDraft(
+                itemId = smallest.item.id,
+                reason = if (smallest.overdueDays > 0) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
+                minutes = smallest.item.estimatedMinutes,
+            )
+            usedMinutes += smallest.item.estimatedMinutes
+            notes += "今天可用的时间很短，只保留了最短的一条，其余已顺延。"
         }
 
-        // 新学补给：受每日新任务上限约束。
+        // 新学：两遍法。第一遍严格按优先级顺序，装不下就记入 deferred，
+        // 不再让后面的短任务插队；第二遍才用剩余容量碎片填补，并说明原因。
         var newCount = 0
         val sortedNew = request.newCandidates.sortedWith(
             compareByDescending<NewCandidate> { it.item.priority.weight }
                 .thenBy { it.item.createdAt },
         )
+        val deferredNew = mutableListOf<NewCandidate>()
+        var blocked = false
         for (candidate in sortedNew) {
             if (newCount >= request.settings.maxNewPerDay) break
             val minutes = candidate.item.estimatedMinutes
-            if (usedMinutes + minutes > effectiveCapacity) continue
-            selected += PlanTaskDraft(candidate.item.id, PlanReason.NEW, minutes)
-            usedMinutes += minutes
-            newCount++
+            if (!blocked && usedMinutes + minutes <= effectiveCapacity) {
+                selected += PlanTaskDraft(candidate.item.id, PlanReason.NEW, minutes)
+                usedMinutes += minutes
+                newCount++
+            } else {
+                blocked = true
+                deferredNew += candidate
+            }
+        }
+        if (deferredNew.isNotEmpty() && newCount < request.settings.maxNewPerDay) {
+            var filled = 0
+            for (candidate in deferredNew.sortedBy { it.item.estimatedMinutes }) {
+                if (newCount >= request.settings.maxNewPerDay) break
+                val minutes = candidate.item.estimatedMinutes
+                if (usedMinutes + minutes <= effectiveCapacity) {
+                    selected += PlanTaskDraft(candidate.item.id, PlanReason.NEW, minutes)
+                    usedMinutes += minutes
+                    newCount++
+                    filled++
+                }
+            }
+            if (filled > 0) {
+                notes += "因容量碎片，补入了 $filled 条较短的新内容；较长的已顺延。"
+            }
         }
 
-        val backlog = (request.dueCandidates.size - selected.count { it.reason != PlanReason.NEW })
-            .coerceAtLeast(0)
+        val selectedIds = selected.map { it.itemId }.toSet()
+        val backlogCandidates = request.dueCandidates.filter { it.item.id !in selectedIds }
+        val backlog = backlogCandidates.size
+        val backlogMinutes = backlogCandidates.sumOf { it.item.estimatedMinutes }
 
         if (backlog > 0) {
-            notes += "另有 $backlog 条内容不急在今天，已顺延到明天；记忆曲线会按真实遗忘进度重新计算，不必补课。"
+            notes += "另有 $backlog 条（约 $backlogMinutes 分钟）不急在今天，已顺延到明天；" +
+                "记忆曲线会按真实遗忘进度重新计算，不必补课。"
         }
         if (newCount > 0 && hasBacklog) {
             notes += "今天以复习为主，新学只安排了 $newCount 条。"

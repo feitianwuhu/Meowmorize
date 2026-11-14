@@ -168,6 +168,8 @@ class PlanRepositoryImpl @Inject constructor(
         now: Instant,
         userAdjusted: Boolean,
     ): DailyPlan {
+        // 历史计划只读：否则「完成率」的分母会被今天的重排悄悄改写，趋势统计失去意义
+        require(date >= timeProvider.today()) { "不允许改写历史计划：$date" }
         val dateKey = date.toString()
         database.withTransaction {
             planDao.deletePlan(dateKey) // 级联删除旧的任务行
@@ -214,12 +216,15 @@ class PlanRepositoryImpl @Inject constructor(
         return database.withTransaction {
             val current = stateDao.getByItem(itemId)?.toModel()
             val item = itemDao.getById(itemId)
+            val todayStart = timeProvider.startOfDay(timeProvider.today()).toEpochMilli()
+            val todayReviewCount = logDao.countBetween(itemId, todayStart, now.toEpochMilli())
             val outcome = scheduler.review(
                 state = current,
                 grade = grade,
                 now = now,
                 targetRetention = targetRetention,
                 itemId = itemId,
+                todayReviewCount = todayReviewCount,
             )
             stateDao.upsert(outcome.state.toEntity())
             logDao.insert(
@@ -227,7 +232,10 @@ class PlanRepositoryImpl @Inject constructor(
                     itemId = itemId,
                     reviewedAt = now,
                     grade = grade,
-                    intervalBefore = current?.scheduledDays ?: 0,
+                    // 真实间隔（天），不是「上次排程天数」；同日重练记 0
+                    intervalBefore = current?.lastReviewedAt?.let {
+                        Duration.between(it, now).toMinutes().coerceAtLeast(0) / 1440
+                    }?.toInt() ?: 0,
                     intervalAfter = outcome.nextIntervalDays,
                     stabilityAfter = outcome.state.stability,
                     phaseAfter = outcome.state.phase,
