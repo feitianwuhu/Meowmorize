@@ -1,5 +1,6 @@
 package com.meowmorize.feature.editor
 
+import android.app.DatePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -62,6 +63,9 @@ import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import com.meowmorize.core.designsystem.component.MarkdownText
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
@@ -117,6 +121,7 @@ fun EditorRoute(
         onArchive = viewModel::archive,
         onNewSubject = viewModel::openNewSubjectDialog,
         onHintChange = viewModel::setHint,
+        onDeadlineChange = viewModel::setDeadline,
         onContentFormatChange = viewModel::setContentFormat,
         onDurationInputChange = viewModel::setDurationInput,
         onTakePhoto = {
@@ -176,6 +181,7 @@ fun EditorScreen(
     onArchive: () -> Unit,
     onNewSubject: () -> Unit,
     onHintChange: (String) -> Unit,
+    onDeadlineChange: (java.time.Instant?) -> Unit,
     onContentFormatChange: (ContentFormat) -> Unit,
     onDurationInputChange: (String) -> Unit,
     onTakePhoto: () -> Unit,
@@ -184,6 +190,7 @@ fun EditorScreen(
     onDismissOcrMessage: () -> Unit,
 ) {
     var markdownPreview by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     if (state.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -447,6 +454,57 @@ fun EditorScreen(
                 maxLines = 4,
                 supportingText = "复习页点「显示提示」才出现；用过提示后不能选「轻松」",
             )
+
+            Spacer(Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "截止日期（可选）",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = if (state.deadlineAt != null) {
+                            "截止日越近，复习越密；不会让下一次复习排到截止之后"
+                        } else {
+                            "设定后临近日期会自动提高复习频率，并保证考前再见一次"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (state.deadlineAt != null) {
+                    MeowTextButton(text = "清除", onClick = { onDeadlineChange(null) })
+                }
+                MeowOutlinedButton(
+                    text = state.deadlineAt?.let {
+                        it.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("M 月 d 日"))
+                    } ?: "选择日期",
+                    onClick = {
+                        val current = state.deadlineAt ?: java.time.Instant.now()
+                            .plus(java.time.Duration.ofDays(30))
+                        val local = current.atZone(ZoneId.systemDefault())
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, day ->
+                                // 截止时间统一定在当天 23:59，避免「考试当天早上」被算成已过期
+                                onDeadlineChange(
+                                    LocalDate.of(year, month + 1, day)
+                                        .atTime(23, 59)
+                                        .atZone(ZoneId.systemDefault())
+                                        .toInstant(),
+                                )
+                            },
+                            local.year,
+                            local.monthValue - 1,
+                            local.dayOfMonth,
+                        ).show()
+                    },
+                )
+            }
 
             Spacer(Modifier.height(14.dp))
             MeowTextField(

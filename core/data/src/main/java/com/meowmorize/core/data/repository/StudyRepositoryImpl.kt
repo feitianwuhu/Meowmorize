@@ -86,6 +86,7 @@ class StudyRepositoryImpl @Inject constructor(
             durationIsCustom = draft.durationIsCustom,
             hint = draft.hint?.trim()?.takeIf { it.isNotEmpty() },
             contentFormat = draft.contentFormat.name,
+            deadlineAt = draft.deadlineAt?.toEpochMilli(),
         )
         return itemDao.insert(entity)
     }

@@ -35,6 +35,8 @@ fun SubjectEntity.toModel(): Subject = Subject(
     colorArgb = colorArgb,
     sortOrder = sortOrder,
     createdAt = Instant.ofEpochMilli(createdAt),
+    weight = weight,
+    examAt = examAt?.let(Instant::ofEpochMilli),
 )
 
 fun Subject.toEntity(): SubjectEntity = SubjectEntity(
@@ -43,6 +45,8 @@ fun Subject.toEntity(): SubjectEntity = SubjectEntity(
     colorArgb = colorArgb,
     sortOrder = sortOrder,
     createdAt = createdAt.toEpochMilli(),
+    weight = weight,
+    examAt = examAt?.toEpochMilli(),
 )
 
 fun ItemEntity.toModel(): MemorizeItem = MemorizeItem(
@@ -60,6 +64,7 @@ fun ItemEntity.toModel(): MemorizeItem = MemorizeItem(
     durationIsCustom = durationIsCustom,
     hint = hint,
     contentFormat = ContentFormat.fromName(contentFormat),
+    deadlineAt = deadlineAt?.let(Instant::ofEpochMilli),
 )
 
 fun MemorizeItem.toEntity(): ItemEntity = ItemEntity(
@@ -77,6 +82,7 @@ fun MemorizeItem.toEntity(): ItemEntity = ItemEntity(
     durationIsCustom = durationIsCustom,
     hint = hint,
     contentFormat = contentFormat.name,
+    deadlineAt = deadlineAt?.toEpochMilli(),
 )
 
 fun ReviewStateEntity.toModel(): ReviewState = ReviewState(
@@ -89,6 +95,10 @@ fun ReviewStateEntity.toModel(): ReviewState = ReviewState(
     phase = LearningPhase.fromName(phase),
     lastReviewedAt = lastReviewedAt?.let(Instant::ofEpochMilli),
     scheduledDays = scheduledDays,
+    leech = leech,
+    leechSince = leechSince?.let(Instant::ofEpochMilli),
+    learningStep = learningStep,
+    sameDayReps = sameDayReps,
 )
 
 fun ReviewState.toEntity(): ReviewStateEntity = ReviewStateEntity(
@@ -101,6 +111,10 @@ fun ReviewState.toEntity(): ReviewStateEntity = ReviewStateEntity(
     phase = phase.name,
     lastReviewedAt = lastReviewedAt?.toEpochMilli(),
     scheduledDays = scheduledDays,
+    leech = leech,
+    leechSince = leechSince?.toEpochMilli(),
+    learningStep = learningStep,
+    sameDayReps = sameDayReps,
 )
 
 fun ReviewLogEntity.toModel(): ReviewLog = ReviewLog(
@@ -113,6 +127,15 @@ fun ReviewLogEntity.toModel(): ReviewLog = ReviewLog(
     stabilityAfter = stabilityAfter,
     phaseAfter = LearningPhase.fromName(phaseAfter),
     itemRevision = itemRevision,
+    elapsedDays = elapsedDays,
+    scheduledDueAt = scheduledDueAt?.let(Instant::ofEpochMilli),
+    stabilityBefore = stabilityBefore,
+    difficultyBefore = difficultyBefore,
+    difficultyAfter = difficultyAfter,
+    retrievability = retrievability,
+    hintUsed = hintUsed,
+    wasOverdue = wasOverdue,
+    actualMs = actualMs,
 )
 
 fun ReviewLog.toEntity(): ReviewLogEntity = ReviewLogEntity(
@@ -125,6 +148,15 @@ fun ReviewLog.toEntity(): ReviewLogEntity = ReviewLogEntity(
     stabilityAfter = stabilityAfter,
     phaseAfter = phaseAfter.name,
     itemRevision = itemRevision,
+    elapsedDays = elapsedDays,
+    scheduledDueAt = scheduledDueAt?.toEpochMilli(),
+    stabilityBefore = stabilityBefore,
+    difficultyBefore = difficultyBefore,
+    difficultyAfter = difficultyAfter,
+    retrievability = retrievability,
+    hintUsed = hintUsed,
+    wasOverdue = wasOverdue,
+    actualMs = actualMs,
 )
 
 fun DailyPlanEntity.toPlan(

@@ -24,6 +24,7 @@ import com.meowmorize.core.domain.plan.PlanDraft
 import com.meowmorize.core.domain.repository.PlanInputs
 import com.meowmorize.core.domain.repository.PlanRepository
 import com.meowmorize.core.domain.srs.FsrsScheduler
+import com.meowmorize.core.domain.srs.LeechPolicy
 import com.meowmorize.core.domain.srs.SrsConfig
 import com.meowmorize.core.model.DailyPlan
 import com.meowmorize.core.model.LearningPhase
@@ -178,6 +179,11 @@ class PlanRepositoryImpl @Inject constructor(
         require(date >= timeProvider.today()) { "不允许改写历史计划：$date" }
         val dateKey = date.toString()
         database.withTransaction {
+            // 首次生成时记下计划量快照；之后无论重排多少次都不覆盖，
+            // 否则「今天重排变少了」会让历史完成率看起来凭空变高。
+            val existing = planDao.getPlan(dateKey)
+            val baselineMinutes = existing?.baselinePlannedMinutes?.takeIf { it > 0 } ?: draft.plannedMinutes
+            val baselineCount = existing?.baselineTaskCount?.takeIf { it > 0 } ?: draft.tasks.size
             planDao.deletePlan(dateKey) // 级联删除旧的任务行
             planDao.upsertPlan(
                 DailyPlanEntity(
@@ -192,6 +198,9 @@ class PlanRepositoryImpl @Inject constructor(
                     newCount = draft.newCount,
                     notes = draft.notes.joinToString("\n"),
                     userAdjusted = userAdjusted,
+                    baselinePlannedMinutes = baselineMinutes,
+                    baselineTaskCount = baselineCount,
+                    todayState = existing?.todayState ?: "AUTO",
                 ),
             )
             planDao.insertPlanItems(
@@ -219,6 +228,8 @@ class PlanRepositoryImpl @Inject constructor(
         now: Instant,
         targetRetention: Double,
         config: SrsConfig,
+        hintUsed: Boolean,
+        leechThreshold: Int,
     ): ReviewOutcome {
         return database.withTransaction {
             val current = stateDao.getByItem(itemId)?.toModel()
@@ -235,23 +246,52 @@ class PlanRepositoryImpl @Inject constructor(
                 todayReviewCount = todayReviewCount,
                 config = config,
             )
-            stateDao.upsert(outcome.state.toEntity())
+
+            // 反复遗忘只做标记，不改 S、不删内容：正确动作是让用户改写或拆分
+            val leech = LeechPolicy.isLeech(
+                lapses = outcome.state.lapses,
+                reps = outcome.state.reps,
+                threshold = leechThreshold,
+            )
+            val nextState = outcome.state.copy(
+                leech = leech,
+                leechSince = when {
+                    !leech -> null
+                    current?.leech == true -> current.leechSince
+                    else -> now
+                },
+                sameDayReps = todayReviewCount + 1,
+            )
+            stateDao.upsert(nextState.toEntity())
+
+            val elapsedDays = current?.lastReviewedAt?.let {
+                (Duration.between(it, now).toMinutes().toDouble() / 1440.0).coerceAtLeast(0.0)
+            } ?: 0.0
+            val scheduledDue = current?.dueAt
             logDao.insert(
                 ReviewLog(
                     itemId = itemId,
                     reviewedAt = now,
                     grade = grade,
-                    // 真实间隔（天），不是「上次排程天数」；同日重练记 0
-                    intervalBefore = current?.lastReviewedAt?.let {
-                        Duration.between(it, now).toMinutes().coerceAtLeast(0) / 1440
-                    }?.toInt() ?: 0,
+                    // 真实间隔（天），不是「上次排程天数」
+                    intervalBefore = elapsedDays.toInt(),
                     intervalAfter = outcome.nextIntervalDays,
                     stabilityAfter = outcome.state.stability,
                     phaseAfter = outcome.state.phase,
                     itemRevision = item?.revision ?: 1,
+                    elapsedDays = elapsedDays,
+                    scheduledDueAt = scheduledDue,
+                    stabilityBefore = outcome.stabilityBefore,
+                    difficultyBefore = current?.difficulty ?: 0.0,
+                    difficultyAfter = outcome.state.difficulty,
+                    retrievability = outcome.retrievability,
+                    hintUsed = hintUsed,
+                    wasOverdue = scheduledDue != null &&
+                        Duration.between(scheduledDue, now).toMinutes() > 1440,
                 ).toEntity(),
             )
-            outcome
+            // 把 leech 标记带回给调用方，界面才能立刻提示「建议改写或拆分」
+            outcome.copy(state = nextState)
         }
     }
 

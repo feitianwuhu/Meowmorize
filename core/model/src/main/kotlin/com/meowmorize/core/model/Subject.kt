@@ -14,6 +14,10 @@ data class Subject(
     val colorArgb: Int,
     val sortOrder: Int = 0,
     val createdAt: Instant = Instant.EPOCH,
+    /** 学科权重：过载时用于分配复习时间（0.6 少排、1.6 多排）。 */
+    val weight: Double = 1.0,
+    /** 该学科的考试时间，作为学科内任务的兜底截止日期。 */
+    val examAt: Instant? = null,
 )
 
 /** 预置学科配色（HyperOS 风格的柔和低饱和色）。 */

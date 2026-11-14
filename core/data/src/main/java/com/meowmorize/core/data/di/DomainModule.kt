@@ -122,11 +122,13 @@ object DomainModule {
     @Singleton
     fun provideGradeReviewUseCase(
         planRepository: PlanRepository,
+        studyRepository: StudyRepository,
         settingsRepository: SettingsRepository,
         timeProvider: TimeProvider,
         syncCalendar: SyncUpcomingToCalendarUseCase,
     ): GradeReviewUseCase = GradeReviewUseCase(
         planRepository = planRepository,
+        studyRepository = studyRepository,
         settingsRepository = settingsRepository,
         timeProvider = timeProvider,
         syncCalendar = syncCalendar,

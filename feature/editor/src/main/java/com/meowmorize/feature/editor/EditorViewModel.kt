@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import javax.inject.Inject
 
 data class EditorUiState(
@@ -34,6 +35,8 @@ data class EditorUiState(
     /** 背诵提示：复习页点「显示提示」才展示。 */
     val hint: String = "",
     val contentFormat: ContentFormat = ContentFormat.PLAIN,
+    /** 截止时间（考试/汇报），为空表示没有期限。 */
+    val deadlineAt: Instant? = null,
     val priority: Priority = Priority.NORMAL,
     /** 编辑已有任务时，是否据此重置排程。 */
     val resetSchedule: Boolean = false,
@@ -115,6 +118,7 @@ class EditorViewModel @Inject constructor(
                 source = item.source.orEmpty(),
                 hint = item.hint.orEmpty(),
                 contentFormat = item.contentFormat,
+                deadlineAt = item.deadlineAt,
                 priority = item.priority,
                 estimatedMinutes = item.estimatedMinutes,
                 durationInput = item.estimatedMinutes.toString(),
@@ -143,6 +147,10 @@ class EditorViewModel @Inject constructor(
 
     fun setHint(value: String) {
         _uiState.update { it.copy(hint = value) }
+    }
+
+    fun setDeadline(value: Instant?) {
+        _uiState.update { it.copy(deadlineAt = value) }
     }
 
     fun setContentFormat(format: ContentFormat) {
@@ -295,6 +303,7 @@ class EditorViewModel @Inject constructor(
                             durationIsCustom = state.durationIsCustom,
                             hint = state.hint.takeIf { it.isNotBlank() },
                             contentFormat = state.contentFormat,
+                            deadlineAt = state.deadlineAt,
                         ),
                     )
                 } else {
@@ -309,6 +318,7 @@ class EditorViewModel @Inject constructor(
                             durationIsCustom = state.durationIsCustom,
                             hint = state.hint.trim().takeIf { it.isNotBlank() },
                             contentFormat = state.contentFormat,
+                            deadlineAt = state.deadlineAt,
                         ),
                         policy = if (state.resetSchedule) {
                             ScheduleUpdatePolicy.RESET_SCHEDULE

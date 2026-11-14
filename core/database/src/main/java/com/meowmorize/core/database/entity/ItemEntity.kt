@@ -1,5 +1,6 @@
 package com.meowmorize.core.database.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -31,9 +32,13 @@ data class ItemEntity(
     val updatedAt: Long,
     val revision: Int = 1,
     /** 时长是否由用户手动指定；false 表示按内容长度自动估算。 */
+    @ColumnInfo(defaultValue = "0")
     val durationIsCustom: Boolean = false,
     /** 用户自定的背诵提示，可空。 */
     val hint: String? = null,
     /** 内容格式：PLAIN / MARKDOWN。 */
+    @ColumnInfo(defaultValue = "PLAIN")
     val contentFormat: String = "PLAIN",
+    /** 背诵截止时间（考试/汇报），为空表示没有期限。 */
+    val deadlineAt: Long? = null,
 )

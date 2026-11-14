@@ -8,6 +8,7 @@ import com.meowmorize.core.model.ReviewState
 import com.meowmorize.core.domain.plan.NewCandidate
 import com.meowmorize.core.domain.plan.DueCandidate
 import com.meowmorize.core.domain.plan.PlanDraft
+import com.meowmorize.core.domain.srs.LeechPolicy
 import com.meowmorize.core.domain.srs.SrsConfig
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -59,6 +60,9 @@ interface PlanRepository {
         now: Instant,
         targetRetention: Double,
         config: SrsConfig = SrsConfig(),
+        /** 本次是否用过提示：用过则评分偏乐观，必须在日志里标注。 */
+        hintUsed: Boolean = false,
+        leechThreshold: Int = LeechPolicy.DEFAULT_THRESHOLD,
     ): ReviewOutcome
 
     /**

@@ -8,7 +8,7 @@ import com.meowmorize.core.domain.repository.PlanRepository
 import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.domain.repository.StudyRepository
 import com.meowmorize.core.domain.srs.FsrsScheduler
-import com.meowmorize.core.domain.srs.SrsPolicy
+import com.meowmorize.core.domain.srs.RetentionResolver
 import com.meowmorize.core.domain.usecase.GradeReviewUseCase
 import com.meowmorize.core.model.MemorizeItem
 import com.meowmorize.core.model.RecallGrade
@@ -40,6 +40,10 @@ data class ReviewUiState(
     val isSaving: Boolean = false,
     val outcome: ReviewOutcome? = null,
     val message: String? = null,
+    /** 生效中的截止时间（任务优先、学科兜底）。 */
+    val deadlineAt: java.time.Instant? = null,
+    /** 生效中的目标保持率：临近截止时会被临时提高。 */
+    val targetRetention: Double = 0.9,
 )
 
 /**
@@ -89,16 +93,22 @@ class ReviewViewModel @Inject constructor(
         settingsRepository.settings,
         mutationAndCount,
     ) { item, subjects, state, settings, (mutation, reviewedToday) ->
+        val subject = item?.subjectId?.let { id -> subjects.firstOrNull { it.id == id } }
+        val now = timeProvider.now()
+        // 与落库共用同一份截止日期/保持率解析，保证按钮上的天数就是存进去的天数
+        val resolved = RetentionResolver.resolve(settings = settings, item = item, subject = subject, now = now)
         ReviewUiState(
             item = item,
-            subject = item?.subjectId?.let { id -> subjects.firstOrNull { it.id == id } },
+            subject = subject,
             state = state,
+            deadlineAt = resolved.deadline,
+            targetRetention = resolved.targetRetention,
             previews = scheduler.previewIntervals(
                 state = state,
-                now = timeProvider.now(),
-                targetRetention = settings.targetRetention,
+                now = now,
+                targetRetention = resolved.targetRetention,
                 todayReviewCount = reviewedToday,
-                config = SrsPolicy.from(settings),
+                config = resolved.config,
             ),
             revealed = mutation.revealed,
             hintVisible = mutation.hintVisible,
@@ -141,7 +151,7 @@ class ReviewViewModel @Inject constructor(
         if (local.value.saving) return
         local.value = local.value.copy(saving = true)
         viewModelScope.launch {
-            runCatching { gradeReview(itemId, grade) }
+            runCatching { gradeReview(itemId, grade, hintUsed = local.value.hintUsed) }
                 .onSuccess { outcome ->
                     local.value = local.value.copy(saving = false, outcome = outcome)
                     // 评完一次，预览要按新的次数重算

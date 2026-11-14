@@ -123,6 +123,31 @@ fun ReviewScreen(
             }
 
             Spacer(Modifier.height(22.dp))
+            val deadline = state.deadlineAt
+            if (deadline != null) {
+                val daysLeft = java.time.Duration.between(
+                    java.time.Instant.now(),
+                    deadline,
+                ).toDays()
+                Text(
+                    text = if (daysLeft >= 0) {
+                        "距截止 $daysLeft 天 · 目标保持率 ${(state.targetRetention * 100).toInt()}%"
+                    } else {
+                        "截止日期已过 · 按普通曲线复习"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            if (state.state?.leech == true) {
+                Text(
+                    text = "这条内容已反复遗忘多次：建议回到任务库改写关键句，或拆成两条更短的。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalMeowColors.current.warning,
+                )
+                Spacer(Modifier.height(8.dp))
+            }
             if (state.subject != null) {
                 SubjectLabel(
                     name = state.subject.name,

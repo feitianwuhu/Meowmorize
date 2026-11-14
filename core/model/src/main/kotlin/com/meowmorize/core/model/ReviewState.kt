@@ -55,6 +55,14 @@ data class ReviewState(
     val phase: LearningPhase = LearningPhase.NEW,
     val lastReviewedAt: Instant? = null,
     val scheduledDays: Int = 0,
+    /** 是否被标记为「反复遗忘」（结构性难记，建议改写或拆分）。 */
+    val leech: Boolean = false,
+    /** 首次被标记为反复遗忘的时间。 */
+    val leechSince: Instant? = null,
+    /** 同步记录当前学习步进序号，供未来做「跨天短期记忆」时使用。 */
+    val learningStep: Int = 0,
+    /** 今天已评过几次（冗余存储，便于不查日志也能显示）。 */
+    val sameDayReps: Int = 0,
 ) {
     /** 是否尚未开始学习。 */
     val isNew: Boolean get() = phase == LearningPhase.NEW

@@ -65,6 +65,12 @@ data class MemorizeItem(
     val hint: String? = null,
     /** 内容格式（纯文本 / Markdown）。 */
     val contentFormat: ContentFormat = ContentFormat.PLAIN,
+    /**
+     * 背诵截止时间（考试/汇报）。
+     * 为空表示没有期限，算法完全按记忆曲线排；有值时进入冲刺窗口会提高保持率，
+     * 并保证「考前至少还能再见一次」。
+     */
+    val deadlineAt: Instant? = null,
 ) {
     val isActive: Boolean get() = status == ItemStatus.ACTIVE
 
@@ -92,6 +98,8 @@ data class ItemDraft(
     val hint: String? = null,
     /** 内容格式（纯文本 / Markdown）。 */
     val contentFormat: ContentFormat = ContentFormat.PLAIN,
+    /** 背诵截止时间（考试/汇报），为空表示没有期限。 */
+    val deadlineAt: Instant? = null,
 )
 
 /** 编辑任务时，用户对「是否更新排程」的选择。 */
