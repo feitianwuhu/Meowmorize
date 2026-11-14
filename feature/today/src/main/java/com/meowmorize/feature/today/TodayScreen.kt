@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +69,7 @@ import com.meowmorize.core.designsystem.theme.displayName
 import com.meowmorize.core.designsystem.theme.tagColors
 import com.meowmorize.core.model.DailyPlan
 import com.meowmorize.core.model.AppStyle
+import com.meowmorize.core.model.TodayState
 import com.meowmorize.core.model.PlannedTask
 import kotlinx.coroutines.delay
 import java.time.LocalTime
@@ -98,6 +100,7 @@ fun TodayRoute(
         onEditTask = onEditTask,
         onCreateTask = onCreateTask,
         onAdjustLoad = { sheetVisible = true },
+        onTodayState = viewModel::setTodayState,
         onDismissMessage = viewModel::dismissMessage,
     )
 
@@ -128,6 +131,7 @@ fun TodayScreen(
     onCreateTask: () -> Unit,
     onAdjustLoad: () -> Unit,
     onDismissMessage: () -> Unit,
+    onTodayState: (TodayState) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 终端风格走完全不同的信息组织方式：规格条 + 曲线 + 柱状图 + 队列
@@ -172,6 +176,14 @@ fun TodayScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item { TodayHeader(onCreateTask = onCreateTask, plan = plan) }
+                    if (state.settings.todayStateEnabled) {
+                        item {
+                            TodayStateRow(
+                                active = state.activeTodayState,
+                                onSelect = onTodayState,
+                            )
+                        }
+                    }
                     item { HeroCard(plan = plan, onAdjustLoad = onAdjustLoad) }
                     if (plan.notes.isNotEmpty()) {
                         item { NotesCard(notes = plan.notes) }
@@ -525,6 +537,51 @@ private fun MessageBanner(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.surface,
             )
+        }
+    }
+}
+
+/**
+ * 「今天状态」三档。刻意做成三个同等大小的胶囊：
+ * 这是每天一次的低成本表态，不该长得像设置项。
+ */
+@Composable
+private fun TodayStateRow(active: TodayState, onSelect: (TodayState) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(
+            TodayState.TIRED to "今天有点累",
+            TodayState.NORMAL to "正常",
+            TodayState.ENERGETIC to "状态不错",
+        ).forEach { (state, label) ->
+            val selected = active == state
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                    .background(
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        else MaterialTheme.colorScheme.surface,
+                    )
+                    .border(
+                        1.dp,
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outline,
+                        androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    )
+                    .clickable { onSelect(state) }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

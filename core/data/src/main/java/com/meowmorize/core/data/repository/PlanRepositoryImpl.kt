@@ -20,6 +20,7 @@ import com.meowmorize.core.database.entity.SubjectEntity
 import com.meowmorize.core.database.entity.ItemEntity
 import com.meowmorize.core.domain.plan.DueCandidate
 import com.meowmorize.core.domain.plan.NewCandidate
+import com.meowmorize.core.domain.plan.DayCompletion
 import com.meowmorize.core.domain.plan.PlanDraft
 import com.meowmorize.core.domain.repository.PlanInputs
 import com.meowmorize.core.domain.repository.PlanRepository
@@ -317,6 +318,36 @@ class PlanRepositoryImpl @Inject constructor(
             val planned = plannedPerDay[key] ?: return@mapNotNull null
             if (planned == 0) return@mapNotNull null
             ((completedPerDay[key] ?: 0).toFloat() / planned).coerceIn(0f, 1f)
+        }
+    }
+
+    override suspend fun recentDailyCompletion(date: LocalDate, days: Int): List<DayCompletion> {
+        val dates = (days downTo 1).map { date.minusDays(it.toLong()) }
+        if (dates.isEmpty()) return emptyList()
+        val from = dates.first().toString()
+        val to = dates.last().toString()
+        val plans = planDao.getPlansBetween(from, to).associateBy { it.date }
+        val planItems = planDao.getPlanItemsBetween(from, to).groupBy { it.date }
+        val logs = logDao.getBetween(
+            timeProvider.startOfDay(dates.first()).toEpochMilli(),
+            timeProvider.endOfDay(dates.last()).toEpochMilli(),
+        )
+
+        return dates.mapNotNull { day ->
+            val key = day.toString()
+            val header = plans[key] ?: return@mapNotNull null
+            val items = planItems[key].orEmpty()
+            val planned = header.baselinePlannedMinutes.takeIf { it > 0 }
+                ?: items.sumOf { it.minutes }
+            if (planned <= 0) return@mapNotNull null
+
+            // 完成 = 当天评分过的计划内任务（「忘了」不算完成，避免把重练当成果）
+            val doneIds = logs.filter {
+                it.grade != RecallGrade.AGAIN.name &&
+                    LocalDate.ofInstant(Instant.ofEpochMilli(it.reviewedAt), timeProvider.zone()) == day
+            }.map { it.itemId }.toSet()
+            val completed = items.filter { it.itemId in doneIds }.sumOf { it.minutes }
+            DayCompletion(plannedMinutes = planned, completedMinutes = completed)
         }
     }
 

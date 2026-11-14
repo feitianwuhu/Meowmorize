@@ -24,11 +24,11 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 | 场景 | 能力 |
 | --- | --- |
 | 今日 | 打开即生成当日计划；完成度环形进度；负荷档位（轻松/标准/冲刺）；算法解释卡；一键调整今日任务量 |
-| 背诵 | 先回忆、再揭晓；「显示提示」会展示用户自写的线索并禁用「轻松」；四档自评点一下先展开答案，该档变成「下一步」，可改选，再确认才落库 |
+| 背诵 | 先回忆、再揭晓；「显示提示」会展示用户自写的线索并禁用「轻松」；四档自评点一下先展开答案，该档变成「下一步」，可改选，再确认才落库；有截止日期时顶部显示倒计时与生效保持率，反复遗忘时给出改写建议 |
 | 日历 | 月视图：学科色点表示已排任务、空心点表示「按曲线推算会到期」；点选某天查看任务与完成情况，可直接进入背诵 |
 | 任务库 | 搜索（主题/内容/来源）、按学科筛选、显示归档；**6 种排序**：最近更新 / 最近创建 / 下次复习 / 主题名称（拼音）/ 预计用时 / 优先级 |
-| 新增/编辑 | 学科、主题、内容、来源、优先级、**背诵提示**；背诵用时自动估算且可 **+/- 或直接输入**；内容支持 **Markdown 高级模式**（标题/列表/引用/两栏对照 + 快捷插入 + 预览）；**OCR 取字（测试）** 提供拍照 / 相册 / 粘贴三条路径；编辑时可选择「保持排程」或「重新学习」 |
-| 设置 | 每日容量、新任务上限、目标保持率、自动减负、周末放宽、主题；**界面风格（柔角卡片 / 终端）**；**系统日历同步**；**时间快进（测试）**；重排今日计划 |
+| 新增/编辑 | 学科、主题、内容、来源、优先级、**背诵提示**、**截止日期**；背诵用时自动估算且可 **+/- 或直接输入**；内容支持 **Markdown 高级模式**（标题/列表/引用/两栏对照 + 快捷插入 + 预览）；**OCR 取字（测试）** 提供拍照 / 相册 / 粘贴三条路径；编辑时可选择「保持排程」或「重新学习」 |
+| 设置 | 每日容量、新任务上限、目标保持率、自动减负、周末放宽、主题；**界面风格（柔角卡片 / 终端）**；**复习算法参数**（最长间隔 / 同日上限 / 难度回归 / 间隔抖动 / leech 阈值，可一键恢复默认）；**弹性实验**（今天状态 / 分钟完成率 / 学科配额，默认关）；**系统日历同步**；**时间快进（测试）**；重排今日计划 |
 
 首次启动会写入 3 个学科与 3 条明确标注「示例」的任务，方便直接体验完整流程。
 
@@ -111,15 +111,15 @@ subjects 1 ──── * items 1 ──── 1 review_states
 因此：编辑任务不会破坏进度，重新生成计划不会弄丢「已完成」，
 后续做统计/参数拟合也只是读日志。
 
-### 4.2 表结构（v2）
+### 4.2 表结构（v4）
 
 | 表 | 主要字段 | 说明 |
 | --- | --- | --- |
-| `subjects` | `id, name(unique), colorArgb, sortOrder` | 学科，名字唯一 |
-| `items` | `id, subjectId(FK, SET_NULL), topic, content, hint, contentFormat, source, priority, status, estimatedMinutes, durationIsCustom, createdAt, updatedAt, revision` | `revision` 每次内容变更自增；`durationIsCustom` 区分手填/估算；`hint` 为复习提示；`contentFormat` 为 PLAIN / MARKDOWN |
-| `review_states` | `itemId(PK, FK CASCADE), dueAt, stability, difficulty, reps, lapses, phase, lastReviewedAt, scheduledDays` | 与任务一对一，FSRS 参数 |
-| `review_logs` | `id, itemId(FK), reviewedAt, grade, intervalBefore, intervalAfter, stabilityAfter, phaseAfter, itemRevision` | 只追加 |
-| `daily_plans` | `date(PK), generatedAt, capacityMinutes, plannedMinutes, loadLevel, targetRetention, elasticityFactor, backlogCount, newCount, notes, userAdjusted` | 一天的元信息 + 算法解释 |
+| `subjects` | `id, name(unique), colorArgb, sortOrder, weight, examAt` | 学科，名字唯一；`weight` 供配额分配，`examAt` 作为任务截止日期的兜底 |
+| `items` | `id, subjectId(FK, SET_NULL), topic, content, hint, contentFormat, source, priority, status, estimatedMinutes, durationIsCustom, deadlineAt, createdAt, updatedAt, revision` | `revision` 每次内容变更自增；`durationIsCustom` 区分手填/估算；`deadlineAt` 为考试/汇报截止 |
+| `review_states` | `itemId(PK, FK CASCADE), dueAt, stability, difficulty, reps, lapses, phase, lastReviewedAt, scheduledDays, leech, leechSince, learningStep, sameDayReps` | 与任务一对一；`leech` 为「反复遗忘」标记，只提示不改算法 |
+| `review_logs` | `id, itemId(FK), reviewedAt, grade, intervalBefore, intervalAfter, stabilityAfter, phaseAfter, itemRevision, elapsedDays, scheduledDueAt, stabilityBefore, difficultyBefore, difficultyAfter, retrievability, hintUsed, wasOverdue, actualMs` | 只追加；后九个字段用于回溯与将来做参数校准 |
+| `daily_plans` | `date(PK), generatedAt, capacityMinutes, plannedMinutes, loadLevel, targetRetention, elasticityFactor, backlogCount, newCount, notes, userAdjusted, baselinePlannedMinutes, baselineTaskCount, todayState` | `baseline*` 是当天首次生成的快照，重排不覆盖，保证完成率分母不被改写 |
 | `daily_plan_items` | `(date, itemId)(PK), reason, orderIndex, minutes` | 计划内容，`reason` 区分逾期/到期/顺延/新学 |
 | `calendar_sync` | `itemId(PK, FK CASCADE), eventId, syncedAt` | 与系统日历事件的映射，保证同步幂等 |
 
@@ -129,9 +129,12 @@ DataStore 的异步 API 会带来「启动瞬间算错日期」的窗口，这�
 
 ### 4.3 迁移策略
 
-- 版本号 `3`：`MIGRATION_1_2` 增加 `durationIsCustom` 并新建 `calendar_sync`；
-  `MIGRATION_2_3` 增加 `hint` 与 `contentFormat`（默认 `PLAIN`）。只加不删，新增列必须带默认值。
-- `schemas/` 下的 `1.json`、`2.json`、`3.json` 纳入版本控制，可据此生成迁移测试。
+- 版本号 `4`：`MIGRATION_1_2` 增加 `durationIsCustom` 与 `calendar_sync`；
+  `MIGRATION_2_3` 增加 `hint` / `contentFormat`；`MIGRATION_3_4` 增加观测字段、
+  截止日期、学科权重、leech 标记与计划快照。
+- 新增列一律 `@ColumnInfo(defaultValue = …)` 且迁移 SQL 带同样的 `DEFAULT`，
+  保证「新装」与「升级」得到完全一致的 schema——两者不一致时 Room 会在启动校验时报错。
+- `schemas/` 下的 `1.json`~`4.json` 纳入版本控制，可据此生成迁移测试。
 - 仅对「降级」保留兜底重建，正常升级永远走迁移。
 
 ---
@@ -149,24 +152,67 @@ DataStore 的异步 API 会带来「启动瞬间算错日期」的窗口，这�
 
 - `t = S` 时 `R = 0.9`，这正是「目标保持率 90%」的默认含义；
 - 评分后更新 `S`：成功回忆按增长曲线提升，遗忘则按衰减公式回退；
-- 评分同时更新 `D`，并做均值回归，避免单次「忘了」把难度永久拉满；
-- 点「忘了」不排到明天，而是 10 分钟后重练（当天内消化）。
+- 评分同时更新 `D`，并向「轻松」的初值回归（`D0(Easy)=3.93`），
+  避免长期难度偏高把增长项 `(11-D)` 一直压低；
+- 点「忘了」不排到明天，而是按 `10m → 60m → 240m` 步进重练；
+  当天超过「同日重练上限」后冷却 6 小时，`lapses` 仍如实累加。
+
+**三处曾经算错、现已修正的地方**（详见 `SchedulingFixTest`）：
+
+| 问题 | 旧行为 | 现行为 |
+| --- | --- | --- |
+| 同日重练的时间间隔 | 把 10 分钟当成 0.25 天（6 小时），R 被算低 | 用真实分钟换算，10 分钟 = 0.0069 天 |
+| 逾期后成功回忆 | 逾期 1 天与 10 天得到同样的间隔 | 按逾期天数给 `S` 加成（最多 +10%，30 天封顶），间隔仍从今天起算 |
+| HARD/EASY | `w15/w16` 乘稳定性，D 变化又影响增长 → 双重加权 | 只乘间隔，稳定性只由 `D` 与 `R` 决定 |
 
 > 相比固定 1/2/4/7 天间隔，FSRS 的最大好处是**抗中断**：
 > 用户停三天，算法只是按真实遗忘程度重算，不会雪崩成「几百条待复习」。
 
-### 5.2 弹性计划生成（`TodayPlanGenerator`）
+### 5.2 弹性计划生成（`TodayPlanGenerator` + `ElasticityPolicy`）
 
 ```
-有效容量 = 用户容量 × 弹性系数（手动设定时直接采用用户数字）
-弹性系数 = 偏好系数 × 自适应系数（完成率<60%→0.7，<80%→0.85，>95%→1.1） × 周末 0.85
-          → 夹在 0.6 ~ 1.25
+factor = 负荷偏好 × 今天状态 × 完成率(或趋势) × 周末
+factor = clamp(factor, 0.60, 1.25)
+if (到期分钟 > 2 × 基准容量) factor = min(factor, 0.90)   // 积压时最后压一手
+有效容量 = round(基准容量 × factor)；手动设定容量时直接采用用户数字，但仍输出推荐值
 有积压时：复习最多占 80% 容量，新学只填剩余空间，且受「每日新任务上限」约束
 放不下的任务 → 顺延（backlog），绝不超发
-极端情况：容量小于任何一条任务，也至少保留最紧急的一条
+极端情况：容量小于任何一条任务，也至少保留最短的一条
 ```
 
+规则本身在 `ElasticityPolicy` 这个纯函数里，生成器只做输入装配——这样每条规则都能单测。
+
+**选择逻辑的两个修正**：
+
+- 逾期与今日到期**共用**同一条 80% 复习配额。旧实现让逾期任务用满容量，
+  结果在最需要缓冲的积压期，新学被彻底饿死。
+- 新学改「两遍法」：第一遍严格按优先级，装不下就记入 deferred 并停止；
+  第二遍才用剩余碎片补入较短的新内容，并说明补了几条——避免短任务插队破坏优先级。
+
 生成结果附带 `notes`（例：`近 3 天完成率 42%，今天自动减负 30%`），UI 原样展示。
+
+### 5.2.1 三项弹性实验（默认关闭）
+
+设置 →「弹性实验」，逐项可开，便于对比：
+
+| 实验 | 做什么 | 为什么默认关 |
+| --- | --- | --- |
+| 今天的状态入口 | 首页三枚胶囊（累 0.80 / 正常 1.0 / 状态好 1.12），只影响当天，跨天自动失效 | 需要用户每天多按一次，属于交互取舍 |
+| 按分钟计算完成率 | 完成率分母 = 当天首次生成的计划分钟快照，分子 = 已完成条目的计划分钟；7 天窗口做最小二乘斜率 | 新装用户没有历史，先积累样本 |
+| 学科配额与轮换 | 仅在过载时生效：按学科权重分容量，夹在 [20%, 60%]，每科保底 1 条量，单科不超发 | 学科少时它就是「平均主义」，反而碍事 |
+
+趋势识别：`slope ≤ -0.04` 判为下滑（×0.90）；后 3 天比前 3 天高 0.08 且最后一天 ≥0.75
+判为恢复（×1.05）。样本 < 3 天或覆盖率 < 50% 时**不动**，只在 notes 里说明「样本不足」。
+
+### 5.2.2 截止日期与 leech
+
+- **截止日期**（`DeadlinePolicy`）：进入冲刺窗口后目标保持率线性升到 97%，
+  并把最长间隔压到「剩余天数」以内，保证考前还能再见一次；已过期则不惩罚。
+  `items.deadlineAt` 优先，`subjects.examAt` 兜底。
+  评分与复习页预览共用 `RetentionResolver`，否则会出现「按钮写 4 天、存进去 2 天」。
+- **反复遗忘**（`LeechPolicy`）：`lapses ≥ 阈值` 或 `reps ≥ 6 且 lapses×2 ≥ reps` 时标记。
+  只做提示（复习页黄字、建议改写或拆分），不自动删除、不改 `S`——
+  这类内容的问题通常在「写得太长/没有线索」，而不是复习次数不够。
 
 ### 5.3 背诵用时：估算 + 用户覆盖
 
@@ -290,7 +336,7 @@ export ANDROID_HOME=/path/to/Android/Sdk
 ./gradlew :app:assembleDebug          # 产物：app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 
-./gradlew :core:domain:test           # 23 个领域层用例
+./gradlew :core:domain:test           # 63 个领域层用例
 ./gradlew :app:lintDebug
 ```
 

@@ -58,6 +58,26 @@ data class UserSettings(
     val overdueMaxBonus: Double = 0.10,
     /** 考试/截止日冲刺窗口（天）：进入窗口后自动提高目标保持率。 */
     val deadlineRampDays: Int = 30,
+
+    // ---------- 弹性实验（默认关闭） ----------
+
+    /** 实验：按「分钟」而非「条数」计算完成率，并识别连续下滑/恢复期。 */
+    val minuteCompletionEnabled: Boolean = false,
+    /** 实验：过载时按学科配额与轮换分配复习时间。 */
+    val subjectQuotaEnabled: Boolean = false,
+    /** 学科最小份额：任何学科都不至于被完全饿死。 */
+    val subjectMinShare: Double = 0.2,
+    /** 学科最大份额：避免某一科挤占整天。 */
+    val subjectMaxShare: Double = 0.6,
+    /** 趋势窗口（天）。 */
+    val trendWindowDays: Int = 7,
+
+    /** 实验：首页显示「今天状态」三档入口。 */
+    val todayStateEnabled: Boolean = false,
+    /** 今天的状态（跨天自动失效）。 */
+    val todayState: TodayState = TodayState.AUTO,
+    /** 该状态对应的日期；null 表示没有设置过。 */
+    val todayStateDate: java.time.LocalDate? = null,
 ) {
     companion object {
         const val MIN_CAPACITY_MINUTES = 5
@@ -80,5 +100,9 @@ data class UserSettings(
         const val MAX_DEADLINE_RAMP_DAYS = 60
         const val MIN_OVERDUE_BONUS = 0.0
         const val MAX_OVERDUE_BONUS = 0.30
+        const val MIN_SUBJECT_SHARE = 0.10
+        const val MAX_SUBJECT_SHARE_LIMIT = 0.80
+        const val MIN_TREND_WINDOW = 3
+        const val MAX_TREND_WINDOW = 14
     }
 }

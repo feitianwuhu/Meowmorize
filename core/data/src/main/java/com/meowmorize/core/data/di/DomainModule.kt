@@ -94,11 +94,13 @@ object DomainModule {
     @Singleton
     fun providePrepareTodayPlanUseCase(
         planRepository: PlanRepository,
+        studyRepository: StudyRepository,
         settingsRepository: SettingsRepository,
         generator: TodayPlanGenerator,
         timeProvider: TimeProvider,
     ): PrepareTodayPlanUseCase = PrepareTodayPlanUseCase(
         planRepository = planRepository,
+        studyRepository = studyRepository,
         settingsRepository = settingsRepository,
         generator = generator,
         timeProvider = timeProvider,

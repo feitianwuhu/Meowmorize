@@ -14,6 +14,8 @@ import com.meowmorize.core.model.DailyPlan
 import com.meowmorize.core.model.LearningPhase
 import com.meowmorize.core.model.RecallGrade
 import com.meowmorize.core.model.ReviewState
+import com.meowmorize.core.model.TodayState
+import com.meowmorize.core.model.activeTodayStateOn
 import com.meowmorize.core.model.UserSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -51,6 +53,10 @@ data class TodayUiState(
 
     /** 当前平均可回忆概率，作为规格条里的一个读数。 */
     val currentRetention: Float? get() = retentionCurve.firstOrNull()
+
+    /** 今天生效的状态：跨天后自动回到 AUTO。 */
+    val activeTodayState: TodayState
+        get() = settings.activeTodayStateOn(date)
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -148,6 +154,31 @@ class TodayViewModel @Inject constructor(
             runCatching { prepareTodayPlan(force = true) }
                 .onSuccess { message.value = "已恢复算法推荐" }
                 .onFailure { message.value = "恢复失败，请稍后再试" }
+            busy.value = false
+        }
+    }
+
+    /**
+     * 一键「今天状态」。
+     * 再次点同一档表示取消（回到 AUTO），避免用户设了「累」之后找不到出口。
+     */
+    fun setTodayState(state: TodayState) {
+        viewModelScope.launch {
+            busy.value = true
+            val today = timeProvider.today()
+            val current = settingsRepository.current().activeTodayStateOn(today)
+            val next = if (current == state && state != TodayState.AUTO) TodayState.AUTO else state
+            runCatching {
+                settingsRepository.update { it.copy(todayState = next, todayStateDate = today) }
+                prepareTodayPlan(force = true)
+            }.onSuccess { plan ->
+                message.value = when (next) {
+                    TodayState.TIRED -> "已按「今天有点累」重排：${plan.totalCount} 条 / ${plan.capacityMinutes} 分钟"
+                    TodayState.ENERGETIC -> "已按「状态不错」重排：${plan.totalCount} 条 / ${plan.capacityMinutes} 分钟"
+                    TodayState.NORMAL -> "已按正常状态重排"
+                    TodayState.AUTO -> "已恢复由算法自动安排"
+                }
+            }.onFailure { message.value = "调整失败，请稍后再试" }
             busy.value = false
         }
     }

@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.SelfImprovement
+import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Weekend
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +82,11 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         onStyleChange = viewModel::setAppStyle,
         onRegeneratePlan = viewModel::regenerateTodayPlan,
         onDismissMessage = viewModel::dismissMessage,
+        onTodayStateEnabledChange = viewModel::setTodayStateEnabled,
+        onMinuteCompletionChange = viewModel::setMinuteCompletion,
+        onSubjectQuotaChange = viewModel::setSubjectQuota,
+        onTrendWindowChange = viewModel::setTrendWindow,
+        onSubjectSharesChange = viewModel::setSubjectShares,
         onMaxIntervalChange = viewModel::setMaxIntervalDays,
         onFuzzChange = viewModel::setIntervalFuzz,
         onLeechThresholdChange = viewModel::setLeechThreshold,
@@ -117,6 +124,11 @@ fun SettingsScreen(
     onStyleChange: (AppStyle) -> Unit,
     onRegeneratePlan: () -> Unit,
     onDismissMessage: () -> Unit,
+    onTodayStateEnabledChange: (Boolean) -> Unit,
+    onMinuteCompletionChange: (Boolean) -> Unit,
+    onSubjectQuotaChange: (Boolean) -> Unit,
+    onTrendWindowChange: (Int) -> Unit,
+    onSubjectSharesChange: (Double, Double) -> Unit,
     onMaxIntervalChange: (Int) -> Unit,
     onFuzzChange: (Boolean) -> Unit,
     onLeechThresholdChange: (Int) -> Unit,
@@ -233,6 +245,70 @@ fun SettingsScreen(
                         onCheckedChange = onWeekendChange,
                         icon = Icons.Rounded.Weekend,
                     )
+                }
+            }
+
+            item {
+                MeowCard {
+                    SectionHeader(
+                        title = "弹性实验",
+                        subtitle = "默认关闭；打开后可以对比「算法是不是更懂我」",
+                    )
+                    MeowSwitchRow(
+                        title = "今天的状态入口",
+                        description = "首页多三枚胶囊：累了 / 正常 / 状态不错。只影响当天，跨天自动失效",
+                        checked = settings.todayStateEnabled,
+                        onCheckedChange = onTodayStateEnabledChange,
+                        icon = Icons.Rounded.SelfImprovement,
+                    )
+                    MeowDivider()
+                    MeowSwitchRow(
+                        title = "按分钟计算完成率",
+                        description = "现在按「条数」算，一道 30 分钟的题和 5 分钟的一样重；切到分钟更接近真实负担",
+                        checked = settings.minuteCompletionEnabled,
+                        onCheckedChange = onMinuteCompletionChange,
+                        icon = Icons.Rounded.Timer,
+                    )
+                    if (settings.minuteCompletionEnabled) {
+                        MeowSliderRow(
+                            title = "趋势窗口",
+                            valueText = "${settings.trendWindowDays} 天",
+                            value = settings.trendWindowDays.toFloat(),
+                            onValueChange = { onTrendWindowChange(it.toInt()) },
+                            valueRange = 3f..14f,
+                            description = "识别连续下滑与恢复期用；样本不足 3 天不会调整",
+                        )
+                    }
+                    MeowDivider()
+                    MeowSwitchRow(
+                        title = "学科配额与轮换",
+                        description = "过载时按学科分容量，避免某一科连续几天吃满，其他科目被饿死",
+                        checked = settings.subjectQuotaEnabled,
+                        onCheckedChange = onSubjectQuotaChange,
+                        icon = Icons.Rounded.CalendarMonth,
+                    )
+                    if (settings.subjectQuotaEnabled) {
+                        MeowSliderRow(
+                            title = "单科最小份额",
+                            valueText = "${(settings.subjectMinShare * 100).toInt()}%",
+                            value = settings.subjectMinShare.toFloat(),
+                            onValueChange = {
+                                onSubjectSharesChange(it.toDouble(), settings.subjectMaxShare)
+                            },
+                            valueRange = 0.10f..0.40f,
+                            description = "任何学科都不至于整天排不进去",
+                        )
+                        MeowSliderRow(
+                            title = "单科最大份额",
+                            valueText = "${(settings.subjectMaxShare * 100).toInt()}%",
+                            value = settings.subjectMaxShare.toFloat(),
+                            onValueChange = {
+                                onSubjectSharesChange(settings.subjectMinShare, it.toDouble())
+                            },
+                            valueRange = 0.40f..0.80f,
+                            description = "避免某一科挤占整天",
+                        )
+                    }
                 }
             }
 

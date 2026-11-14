@@ -38,6 +38,12 @@ data class PlanRequest(
     /** 用户手动拖动容量后的分钟数，优先级高于设置里的默认容量。 */
     val forcedCapacityMinutes: Int? = null,
     val loadPreference: LoadPreference = LoadPreference.AUTO,
+    /** 今天的状态（累/正常/状态好），只影响当天。 */
+    val todayState: com.meowmorize.core.model.TodayState = com.meowmorize.core.model.TodayState.AUTO,
+    /** 分钟口径的完成率趋势；null 表示未开启该实验。 */
+    val completionTrend: CompletionTrend.Result? = null,
+    /** 学科权重，供配额分配使用；缺省按 1.0。 */
+    val subjectWeights: Map<Long, Double> = emptyMap(),
 )
 
 data class PlanTaskDraft(
@@ -124,15 +130,68 @@ class TodayPlanGenerator {
         val selected = mutableListOf<PlanTaskDraft>()
         var usedMinutes = 0
 
-        for (candidate in sortedDue) {
-            val minutes = candidate.item.estimatedMinutes
-            if (usedMinutes + minutes <= reviewQuota) {
-                selected += PlanTaskDraft(
-                    itemId = candidate.item.id,
-                    reason = if (candidate.overdueDays > 0) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
-                    minutes = minutes,
-                )
-                usedMinutes += minutes
+        val quota = if (request.settings.subjectQuotaEnabled && hasBacklog) {
+            SubjectQuotaAllocator.allocate(
+                candidates = sortedDue.map {
+                    SubjectQuotaAllocator.Candidate(
+                        itemId = it.item.id,
+                        subjectId = it.item.subjectId,
+                        minutes = it.item.estimatedMinutes,
+                    )
+                },
+                capacityMinutes = reviewQuota,
+                weights = request.subjectWeights,
+                minShare = request.settings.subjectMinShare,
+                maxShare = request.settings.subjectMaxShare,
+            )
+        } else {
+            null
+        }
+
+        if (quota != null && quota.applied) {
+            notes += quota.notes
+            val picked = mutableSetOf<Long>()
+            // 先按学科在各自配额内挑，学科内仍按逾期→优先级→R 排序
+            sortedDue.groupBy { it.item.subjectId }.forEach { (subjectId, list) ->
+                var budget = quota.budgets[subjectId] ?: 0
+                for (candidate in list) {
+                    val minutes = candidate.item.estimatedMinutes
+                    if (minutes <= budget && usedMinutes + minutes <= reviewQuota) {
+                        selected += PlanTaskDraft(
+                            itemId = candidate.item.id,
+                            reason = if (candidate.overdueDays > 0) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
+                            minutes = minutes,
+                        )
+                        usedMinutes += minutes
+                        budget -= minutes
+                        picked += candidate.item.id
+                    }
+                }
+            }
+            // 配额算完后若还有余量，按原优先级补满，避免浪费容量
+            for (candidate in sortedDue) {
+                if (candidate.item.id in picked) continue
+                val minutes = candidate.item.estimatedMinutes
+                if (usedMinutes + minutes <= reviewQuota) {
+                    selected += PlanTaskDraft(
+                        itemId = candidate.item.id,
+                        reason = if (candidate.overdueDays > 0) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
+                        minutes = minutes,
+                    )
+                    usedMinutes += minutes
+                }
+            }
+        } else {
+            for (candidate in sortedDue) {
+                val minutes = candidate.item.estimatedMinutes
+                if (usedMinutes + minutes <= reviewQuota) {
+                    selected += PlanTaskDraft(
+                        itemId = candidate.item.id,
+                        reason = if (candidate.overdueDays > 0) PlanReason.OVERDUE else PlanReason.DUE_TODAY,
+                        minutes = minutes,
+                    )
+                    usedMinutes += minutes
+                }
             }
         }
 
@@ -222,51 +281,32 @@ class TodayPlanGenerator {
 
     /**
      * 弹性系数：把「用户近况」折算成一个容量乘数。
-     * 只有样本足够（≥2 天）时才启用自适应，避免第一天就被误判。
+     *
+     * 具体规则在 [ElasticityPolicy] 里，这里只做输入装配——
+     * 规则要能被单测逐条钉住，生成器不该埋着第二套口径。
      */
     private fun computeElasticityFactor(
         request: PlanRequest,
         capacityBase: Int,
         notes: MutableList<String>,
     ): Double {
-        var factor = request.loadPreference.capacityFactor
-        when (request.loadPreference) {
-            LoadPreference.RELAXED -> notes += "已按「轻松」模式降低今日目标。"
-            LoadPreference.INTENSE -> notes += "已按「冲刺」模式提高今日目标，注意别硬撑。"
-            LoadPreference.STEADY -> notes += "已按标准容量安排今日任务。"
-            LoadPreference.AUTO -> Unit
-        }
-
-        val ratios = request.recentCompletionRatios.filter { it >= 0f }
-        if (request.settings.adaptiveLoadEnabled && request.loadPreference == LoadPreference.AUTO && ratios.size >= 2) {
-            val avg = ratios.average()
-            when {
-                avg < 0.6 -> {
-                    factor *= 0.7
-                    notes += "最近 ${ratios.size} 天完成率 ${(avg * 100).roundToInt()}%，今天自动减负 30%，先把节奏找回来。"
-                }
-                avg < 0.8 -> {
-                    factor *= 0.85
-                    notes += "最近完成率 ${(avg * 100).roundToInt()}%，今天容量下调 15%。"
-                }
-                avg > 0.95 && request.dueCandidates.size > 3 -> {
-                    factor *= 1.1
-                    notes += "最近状态不错，今天可适度加量 10%。"
-                }
-            }
-        }
-
-        if (request.isWeekend && request.settings.weekendReliefEnabled) {
-            factor *= 0.85
-            notes += "周末放宽：容量按 85% 计算。"
-        }
-
         val dueMinutes = request.dueCandidates.sumOf { it.item.estimatedMinutes }
-        if (dueMinutes > capacityBase * 2) {
-            factor = factor.coerceAtMost(0.9)
-            notes += "积压时长已超过两天的容量，今天优先处理最关键的，其余继续顺延。"
-        }
-
-        return factor.coerceIn(0.6, 1.25)
+        val result = ElasticityPolicy.compute(
+            ElasticityPolicy.Input(
+                loadPreference = request.loadPreference,
+                todayState = request.todayState,
+                adaptiveEnabled = request.settings.adaptiveLoadEnabled,
+                minuteCompletionEnabled = request.settings.minuteCompletionEnabled,
+                completionRatios = request.recentCompletionRatios,
+                trend = request.completionTrend,
+                isWeekend = request.isWeekend,
+                weekendReliefEnabled = request.settings.weekendReliefEnabled,
+                dueMinutes = dueMinutes,
+                baseCapacityMinutes = capacityBase,
+                dueCandidateCount = request.dueCandidates.size,
+            ),
+        )
+        notes += result.notes
+        return result.factor
     }
 }

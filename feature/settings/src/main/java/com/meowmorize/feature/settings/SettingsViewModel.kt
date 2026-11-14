@@ -104,6 +104,23 @@ class SettingsViewModel @Inject constructor(
 
     fun setAppStyle(style: AppStyle) = updateSettings { it.copy(appStyle = style) }
 
+    // ---------- 弹性实验（默认关闭） ----------
+
+    fun setTodayStateEnabled(enabled: Boolean) = updateSettings { it.copy(todayStateEnabled = enabled) }
+
+    fun setMinuteCompletion(enabled: Boolean) = updateSettings { it.copy(minuteCompletionEnabled = enabled) }
+
+    fun setSubjectQuota(enabled: Boolean) = updateSettings { it.copy(subjectQuotaEnabled = enabled) }
+
+    fun setTrendWindow(days: Int) = updateSettings { it.copy(trendWindowDays = days) }
+
+    fun setSubjectShares(minShare: Double, maxShare: Double) = updateSettings {
+        it.copy(
+            subjectMinShare = minShare.coerceAtMost(maxShare),
+            subjectMaxShare = maxShare,
+        )
+    }
+
     // ---------- 复习算法 ----------
 
     // 算法参数不影响「今天排多少」，因此只写设置、不重排计划：

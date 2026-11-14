@@ -23,6 +23,9 @@ interface DailyPlanDao {
     @Query("DELETE FROM daily_plans WHERE date = :date")
     suspend fun deletePlan(date: String)
 
+    @Query("SELECT * FROM daily_plans WHERE date BETWEEN :startDate AND :endDate")
+    suspend fun getPlansBetween(startDate: String, endDate: String): List<DailyPlanEntity>
+
     @Query("SELECT * FROM daily_plan_items WHERE date = :date ORDER BY orderIndex ASC")
     fun observePlanItems(date: String): Flow<List<DailyPlanItemEntity>>
 

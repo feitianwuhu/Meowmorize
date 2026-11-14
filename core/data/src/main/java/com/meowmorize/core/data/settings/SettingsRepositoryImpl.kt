@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.model.TaskSortOrder
+import com.meowmorize.core.model.TodayState
 import com.meowmorize.core.model.ThemeMode
 import com.meowmorize.core.model.UserSettings
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
+import java.time.LocalDate
 import javax.inject.Singleton
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "meow_settings")
@@ -67,6 +69,14 @@ class SettingsRepositoryImpl @Inject constructor(
             sameDayRepeatLimit = this[Keys.SAME_DAY_REPEAT] ?: defaults.sameDayRepeatLimit,
             overdueMaxBonus = this[Keys.OVERDUE_BONUS] ?: defaults.overdueMaxBonus,
             deadlineRampDays = this[Keys.DEADLINE_RAMP_DAYS] ?: defaults.deadlineRampDays,
+            minuteCompletionEnabled = this[Keys.MINUTE_COMPLETION] ?: defaults.minuteCompletionEnabled,
+            subjectQuotaEnabled = this[Keys.SUBJECT_QUOTA] ?: defaults.subjectQuotaEnabled,
+            subjectMinShare = this[Keys.SUBJECT_MIN_SHARE] ?: defaults.subjectMinShare,
+            subjectMaxShare = this[Keys.SUBJECT_MAX_SHARE] ?: defaults.subjectMaxShare,
+            trendWindowDays = this[Keys.TREND_WINDOW] ?: defaults.trendWindowDays,
+            todayStateEnabled = this[Keys.TODAY_STATE_ENABLED] ?: defaults.todayStateEnabled,
+            todayState = TodayState.fromName(this[Keys.TODAY_STATE]),
+            todayStateDate = this[Keys.TODAY_STATE_DATE]?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
         ).sanitized()
     }
 
@@ -89,6 +99,15 @@ class SettingsRepositoryImpl @Inject constructor(
         this[Keys.SAME_DAY_REPEAT] = settings.sameDayRepeatLimit
         this[Keys.OVERDUE_BONUS] = settings.overdueMaxBonus
         this[Keys.DEADLINE_RAMP_DAYS] = settings.deadlineRampDays
+        this[Keys.MINUTE_COMPLETION] = settings.minuteCompletionEnabled
+        this[Keys.SUBJECT_QUOTA] = settings.subjectQuotaEnabled
+        this[Keys.SUBJECT_MIN_SHARE] = settings.subjectMinShare
+        this[Keys.SUBJECT_MAX_SHARE] = settings.subjectMaxShare
+        this[Keys.TREND_WINDOW] = settings.trendWindowDays
+        this[Keys.TODAY_STATE_ENABLED] = settings.todayStateEnabled
+        this[Keys.TODAY_STATE] = settings.todayState.name
+        settings.todayStateDate?.let { this[Keys.TODAY_STATE_DATE] = it.toString() }
+            ?: remove(Keys.TODAY_STATE_DATE)
     }
 
     private fun UserSettings.sanitized(): UserSettings = copy(
@@ -126,6 +145,21 @@ class SettingsRepositoryImpl @Inject constructor(
             UserSettings.MIN_DEADLINE_RAMP_DAYS,
             UserSettings.MAX_DEADLINE_RAMP_DAYS,
         ),
+        subjectMinShare = subjectMinShare.coerceIn(
+            UserSettings.MIN_SUBJECT_SHARE,
+            UserSettings.MAX_SUBJECT_SHARE_LIMIT,
+        ).let { min ->
+            // 下限不能大于上限，否则配额算法会互相打架
+            min.coerceAtMost(subjectMaxShare)
+        },
+        subjectMaxShare = subjectMaxShare.coerceIn(
+            UserSettings.MIN_SUBJECT_SHARE,
+            UserSettings.MAX_SUBJECT_SHARE_LIMIT,
+        ),
+        trendWindowDays = trendWindowDays.coerceIn(
+            UserSettings.MIN_TREND_WINDOW,
+            UserSettings.MAX_TREND_WINDOW,
+        ),
     )
 
     private object Keys {
@@ -147,5 +181,13 @@ class SettingsRepositoryImpl @Inject constructor(
         val SAME_DAY_REPEAT = intPreferencesKey("srs_same_day_repeat_limit")
         val OVERDUE_BONUS = doublePreferencesKey("srs_overdue_bonus")
         val DEADLINE_RAMP_DAYS = intPreferencesKey("srs_deadline_ramp_days")
+        val MINUTE_COMPLETION = booleanPreferencesKey("minute_completion_enabled")
+        val SUBJECT_QUOTA = booleanPreferencesKey("subject_quota_enabled")
+        val SUBJECT_MIN_SHARE = doublePreferencesKey("subject_min_share")
+        val SUBJECT_MAX_SHARE = doublePreferencesKey("subject_max_share")
+        val TREND_WINDOW = intPreferencesKey("trend_window_days")
+        val TODAY_STATE_ENABLED = booleanPreferencesKey("today_state_enabled")
+        val TODAY_STATE = stringPreferencesKey("today_state")
+        val TODAY_STATE_DATE = stringPreferencesKey("today_state_date")
     }
 }

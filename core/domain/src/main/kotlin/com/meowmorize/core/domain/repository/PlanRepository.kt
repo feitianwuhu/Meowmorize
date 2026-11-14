@@ -7,6 +7,7 @@ import com.meowmorize.core.model.ReviewOutcome
 import com.meowmorize.core.model.ReviewState
 import com.meowmorize.core.domain.plan.NewCandidate
 import com.meowmorize.core.domain.plan.DueCandidate
+import com.meowmorize.core.domain.plan.DayCompletion
 import com.meowmorize.core.domain.plan.PlanDraft
 import com.meowmorize.core.domain.srs.LeechPolicy
 import com.meowmorize.core.domain.srs.SrsConfig
@@ -73,4 +74,10 @@ interface PlanRepository {
 
     /** 最近 N 天的完成率（不含 [date] 当天），用于自适应容量。 */
     suspend fun recentCompletionRatios(date: LocalDate, days: Int = 7): List<Float>
+
+    /**
+     * 最近 N 天的「计划分钟 vs 完成分钟」（不含 [date] 当天）。
+     * 分母用当天首次生成时的快照，重排不会改写历史。
+     */
+    suspend fun recentDailyCompletion(date: LocalDate, days: Int = 7): List<DayCompletion>
 }
