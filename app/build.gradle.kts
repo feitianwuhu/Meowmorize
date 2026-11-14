@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+// 签名配置从用户主目录读取，密钥与口令都不进仓库。
+// 文件不存在时（例如 CI 或他人克隆）release 仍能构建，只是产出未签名 APK。
+val keystoreProps = Properties().apply {
+    val file = File(System.getProperty("user.home"), ".meowmorize/keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile")?.let { File(it).exists() } == true
 
 android {
     namespace = "com.meowmorize.app"
@@ -19,14 +29,32 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = File(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // 首个公开版先不开 R8：本机没有真机可做冒烟验证，
+            // 混淆/裁剪一旦踩到反射就会表现为「装得上、点开崩」。
+            // 等实机验证后再打开，届时需要补 ML Kit / Hilt 的 keep 规则回归。
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

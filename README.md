@@ -8,6 +8,20 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 
 ---
 
+## 零、下载与安装
+
+最新正式版见 GitHub Releases：`https://github.com/feitianwuhu/Meowmorize/releases/latest`
+
+- 安装包：**Meowmorize.apk**（`applicationId = com.meowmorize.app`，minSdk 29 / Android 10+）
+- 首次安装需要在系统里允许「安装未知来源应用」
+- 校验：`sha256sum Meowmorize.apk` 应与 Release 页面给出的一致
+- 签名：`CN=Meowmorize`，SHA-256 指纹见 Release 说明。**后续升级必须用同一密钥签名**，
+  否则系统会拒绝覆盖安装（只能卸载重装，本地数据会丢）
+
+调试版与正式版包名不同（`com.meowmorize.app.debug`），可以并存，互不影响数据。
+
+---
+
 ## 一、设计原则
 
 1. **算法结论必须可解释。** 每日计划会附带「为什么今天是这样安排的」说明，

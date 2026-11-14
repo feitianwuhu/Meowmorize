@@ -13,3 +13,11 @@ local.properties
 
 # 本地智能体工作区数据（不入库）
 .workbuddy/
+
+# 签名材料：绝不入库
+keystore.properties
+*.jks
+*.keystore
+
+# 本地分发的构建产物
+dist/
