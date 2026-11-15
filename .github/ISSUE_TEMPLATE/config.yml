@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安装与使用问题
+    url: https://github.com/feitianwuhu/Meowmorize#零下载与安装
+    about: 安装失败、OCR 不可用等，先看 README 的说明
+  - name: 安全漏洞
+    url: https://github.com/feitianwuhu/Meowmorize/security/advisories/new
+    about: 请不要公开提交 issue，改用私密渠道

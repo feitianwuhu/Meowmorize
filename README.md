@@ -1,6 +1,28 @@
-# Meowmorize
+<p align="center">
+  <img src="docs/branding/icon-512.png" width="132" alt="Meowmorize" />
+</p>
 
-> 以人为本的背诵学习辅助应用 · Android 10+（minSdk 29）· Kotlin + Jetpack Compose + Room + Hilt
+<h1 align="center">Meowmorize</h1>
+
+<p align="center">
+  <a href="https://github.com/feitianwuhu/Meowmorize/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/feitianwuhu/Meowmorize?sort=semver"></a>
+  <a href="https://github.com/feitianwuhu/Meowmorize/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/feitianwuhu/Meowmorize/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/feitianwuhu/Meowmorize"></a>
+  <img alt="Android" src="https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white">
+  <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white">
+  <img alt="Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material3-4285F4?logo=jetpackcompose&logoColor=white">
+</p>
+
+> **它不是又一个待办清单，而是回答「今天该背多少」的排程器。**
+> 你只管写内容，剩下的「今天背什么、背几条、什么时候再见」交给遗忘曲线与弹性规则。
+
+大多数背诵工具把到期内容一次性推给你；一旦停几天，回来就是几百条待复习，
+然后就没有然后了。Meowmorize 把「记忆量」和「人的承受力」放在同一条约束里：
+**宁可顺延，也不超发**。
+
+---
+
+## 为什么是「今天背多少」
 
 Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让人**愿意继续背下去**」。
 它用 FSRS 遗忘曲线决定**该复习什么**，用弹性容量规则决定**今天该复习多少**，
@@ -366,7 +388,8 @@ v1.0.0 在部分 ROM（华为 HarmonyOS 4.2、小米澎湃 OS 1）上「点开�
 
 ## 七、构建与运行
 
-环境：JDK 17+（本项目在 JDK 21 target 上验证）、Android SDK 37、Gradle 9.6、AGP 9.4。
+环境：**JDK 21**（AGP 9 的要求）、Android SDK 37、Gradle 9.6、AGP 9.4。
+签名材料不入库，release 构建会从 `~/.meowmorize/keystore.properties` 读取，缺失时产出 unsigned 包。
 
 ```bash
 export ANDROID_HOME=/path/to/Android/Sdk
@@ -403,9 +426,15 @@ Meowmorize/
 │   └── designsystem/             # 主题与通用组件
 ├── feature/
 │   ├── today/  calendar/  library/  editor/  settings/
+├── docs/branding/                # README 用的图标
+├── tools/generate_icons.py       # 从源图生成全套启动图标（纯标准库）
+├── .github/                      # CI、issue/PR 模板、dependabot
 ├── gradle/libs.versions.toml     # 版本目录
 └── README.md
 ```
+
+图标不是手工导出的：`python tools/generate_icons.py <源图.png>` 会生成 5 个密度的
+legacy / 圆形 / 自适应前景，并重写 `mipmap-anydpi-v26` 的 XML。
 
 ---
 
@@ -416,6 +445,20 @@ Meowmorize/
 | 统计与趋势 | 读 `review_logs` 增加 `:feature:stats`，domain 加 `ReviewStatsUseCase`，不改表结构 |
 | 复习提醒 | 用 `review_states.dueAt` 做 WorkManager 每日调度；`calendar_sync` 已可作为事件锚点 |
 | 个性化时间估算 | 用日志拟合「主题类型 → 实际耗时」系数，替换 `DurationEstimator` 的常数 |
-| 语音背诵 / 填空自测 | 新增 `RecitationMode` 与 `feature:recite`，复用 `item.content` |
+| 语音背诵 | 新增 `feature:recite`，用系统 SpeechRecognizer 对比 `content`，不改表结构 |
+| 更多复习模式 | `items.clozeAnswer` 已经区分了「整段」与「挖空」，可继续扩展选择题/听写 |
 | 多端同步 | 替换 `:core:data` 的仓库实现（接口隔离在 domain） |
 | 更快的时间实验 | 在现有 `TimeTravelRepository` 上增加「按天自动推进」的测试脚本 |
+
+---
+
+## 十、许可证与素材声明
+
+代码以 [MIT License](LICENSE) 发布，可自由使用、修改、分发，保留版权声明即可。
+
+**应用图标是例外**：它使用了第三方角色形象（来自《明日方舟》的同人表情），
+版权归原权利方所有，**不在 MIT 许可范围内**，仅作为个人项目的非商业标识使用。
+如果你要基于本项目做二次分发或商业使用，请替换 `app/src/main/res/mipmap-*` 下的图标资源。
+
+替换方式见 [CONTRIBUTING.md](CONTRIBUTING.md)：准备一张透明背景的方形图，
+跑一次 `python tools/generate_icons.py <图>` 即可，不要手工改单张 PNG。

@@ -1,0 +1,60 @@
+name: 问题反馈
+description: 闪退、显示错乱、排程结果不对……都可以在这里说
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量把「设备信息」和「复现步骤」写全 —— 这个应用有大量按时间演进的逻辑，
+        缺了这些信息基本没法定位。
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 设置页底部，或 Release 页面上的版本号
+      placeholder: 例如 1.0.1 (versionCode 2)
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      placeholder: 例如 小米 10 / 澎湃 OS 1（Android 13）
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开应用开始，按顺序写清点了什么
+      placeholder: |
+        1. 打开应用
+        2. 进入「任务库」
+        3. 点某条任务的「删除」
+        4. 闪退
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: crash
+    attributes:
+      label: 崩溃日志（可选，但很有用）
+      description: |
+        应用会把未捕获异常写到 `Android/data/com.meowmorize.app/files/crash-*.txt`，
+        把最新那个文件的内容贴进来即可。
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过现有 issue，没有重复
+          required: true
+        - label: 我使用的是最新发布版
+          required: true

@@ -1,0 +1,49 @@
+name: 功能建议
+description: 想要新的学习方式、排程规则或界面改进
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提建议时最有说服力的是「你现在的做法」和「卡在哪」。
+        比如「我用 Anki 时每天要手动挑 20 张卡，挑卡本身比背还累」比「加个智能推荐」有用得多。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的具体问题
+      placeholder: 描述场景，而不是直接给方案
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: 你希望怎么解决
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你试过的替代方案
+      description: 别的应用怎么做的、为什么不够用
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及哪一部分
+      options:
+        - 排程 / 遗忘算法
+        - 今日任务量（弹性规则）
+        - 背诵交互
+        - 任务库 / 编辑器
+        - 日历
+        - 界面与视觉
+        - 其他
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过现有 issue，没有重复
+          required: true
