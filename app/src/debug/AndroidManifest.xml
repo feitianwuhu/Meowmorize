@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      仅 debug 变体：额外放一个桌面图标，点进去是不经过 Compose / Hilt 的裸界面。
+      用来区分「进程起不来」和「界面画不出来」两种闪退，不会进正式包。
+    -->
+    <application>
+        <activity
+            android:name=".ProbeActivity"
+            android:exported="true"
+            android:label="@string/probe_label"
+            android:theme="@android:style/Theme.Material.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

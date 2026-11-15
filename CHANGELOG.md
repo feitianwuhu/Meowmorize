@@ -7,6 +7,25 @@
 
 （暂无）
 
+## [1.0.3] - 2026-11-15
+
+### 修复
+- **启动即闪退（Android 13 及以下）**：根因是 `LocalDate.ofInstant(...)`——Java 9 才追加、
+  Android 上要 **API 34** 才有实现的方法。项目 minSdk 29、compileSdk 37，编译期毫无警告，
+  运行到「今天」页实例化 `TodayViewModel` 取当天日期时直接抛 `NoSuchMethodError`。
+  改为 `Instant.atZone(zone).toLocalDate()`（API 26 起就有），共 7 处调用点。
+  这就是 1.0.1 / 1.0.2 两次「换 OCR / 换打包方式」都没治好的那个闪退。
+- **崩溃上报本身就是坏的**：`CrashLog.install()` 存的是 `context.applicationContext`，
+  而它首次执行于 `Application.attachBaseContext`——此时该值必为 `null`，
+  于是处理器装上了却永远写不出文件，此前「没有日志」被误读成「应用代码没跑」。
+  改为回退到传入的 Context，并把安装点移到 `super.attachBaseContext` 之前。
+
+### 新增
+- 启动阶段记录：每个关键阶段（attachBaseContext / Application.onCreate / 首个 Activity /
+  首帧）落一行，崩溃报告里会整段附带
+- debug 变体新增「探针」界面（纯 `Activity` + `TextView`，不经 Compose / Hilt），
+  可直接在屏幕上读启动记录与崩溃报告，便于手机不接电脑时取证
+
 ## [1.0.2] - 2026-11-15
 
 ### 新增
@@ -21,8 +40,9 @@
 ## [1.0.1] - 2026-11-15
 
 ### 修复
-- **部分 ROM 启动即闪退**（华为鸿蒙 4.2 / 小米澎湃 OS 1 复现，Android 14/15 正常）：
+- **部分 ROM 启动即闪退**（Android 13 及以下复现，Android 14/15 正常）：
   OCR 从打包版 ML Kit 换成 GMS 按需下载版，APK 内不再包含 OCR 原生库
+  （注：真正的根因在 1.0.3 才定位，见该版本说明）
 - native 库改为安装时解压（`useLegacyPackaging`），避免个别 ROM 直接 mmap 失败
 - 启动页不再对 View 的 Context 强转 `Activity`，改为逐层解包 `ContextWrapper`
 - 复习评分出结果后按钮未锁定，可连续点击把间隔推到很远

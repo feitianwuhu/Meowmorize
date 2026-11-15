@@ -1,10 +1,10 @@
 package com.meowmorize.app
 
 import android.app.Application
-import android.os.Build
-import java.io.File
+import android.content.Context
 import com.meowmorize.core.data.seed.DemoDataInitializer
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,40 +23,43 @@ class MeowmorizeApplication : Application() {
     @Inject
     lateinit var demoDataInitializer: DemoDataInitializer
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-    override fun onCreate() {
-        super.onCreate()
-        installCrashLogger()
-        appScope.launch { demoDataInitializer.initialize() }
-    }
+    /**
+     * 启动期的协程异常必须自己接住。
+     *
+     * 之前的写法只有 SupervisorJob：它只隔离「兄弟协程」，并不会吞掉异常——
+     * 未捕获的异常仍会交给线程默认处理器，直接把进程干掉。
+     * 于是「首次数据初始化失败」会被用户看成「应用一点就闪退」，实际上界面本可以正常打开。
+     */
+    private val appScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, error ->
+            StartupTrace.markError(this, "seed", error)
+        },
+    )
 
     /**
-     * 把未捕获异常写进私有目录。
+     * 应用代码里最早能执行的位置：Context 已挂上，能写文件。
+     * 这一笔决定了「应用代码到底有没有开始执行」。
      *
-     * 起因：有用户反馈在部分 ROM 上「点开即闪退」，而开发机没有对应设备。
-     * 写盘比什么都实在——用户装一次、复现一次，就能把完整堆栈发回来，
-     * 不必教人抓 logcat。异常仍然照常抛出，不改变崩溃行为。
+     * 装处理器必须在 super 之前：super 内部（Hilt 基类、BaseContext 绑定）也可能抛，
+     * 放在后面就等于给最想抓的那段崩溃留了个空档。
      */
-    private fun installCrashLogger() {
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            runCatching {
-                val stamp = System.currentTimeMillis()
-                val file = File(filesDir, "crash-$stamp.txt")
-                file.writeText(
-                    buildString {
-                        appendLine("time=${java.util.Date(stamp)}")
-                        appendLine("device=${Build.MANUFACTURER} ${Build.MODEL}")
-                        appendLine("android=${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-                        appendLine("version=${packageManager.getPackageInfo(packageName, 0).versionName}")
-                        appendLine("thread=${thread.name}")
-                        appendLine()
-                        append(error.stackTraceToString())
-                    },
-                )
-            }
-            previous?.uncaughtException(thread, error)
+    override fun attachBaseContext(base: Context?) {
+        if (base != null) {
+            CrashLog.install(base)
+            StartupTrace.mark(base, "attachBaseContext")
+        }
+        super.attachBaseContext(base)
+    }
+
+    override fun onCreate() {
+        // Hilt 的依赖图在 super.onCreate 里构建，这一步抛异常会直接带走进程
+        super.onCreate()
+        StartupTrace.mark(this, "Application.onCreate(hilt ready)")
+        appScope.launch {
+            runCatching { demoDataInitializer.initialize() }
+                .onFailure { StartupTrace.markError(this@MeowmorizeApplication, "seed", it) }
+            StartupTrace.mark(this@MeowmorizeApplication, "seed.done")
         }
     }
+
 }

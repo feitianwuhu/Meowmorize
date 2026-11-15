@@ -26,9 +26,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        StartupTrace.mark(this, "MainActivity.onCreate")
+
+        // 个别 ROM 的 WindowInsets 实现会在 enableEdgeToEdge 里抛异常；
+        // 沉浸式是「锦上添花」，不该成为启动失败的理由。
+        runCatching { enableEdgeToEdge() }
+            .onFailure { StartupTrace.markError(this, "enableEdgeToEdge", it) }
 
         setContent {
+            // 首次组合成功 = 主题/依赖注入/资源都过了，这一笔很有价值
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                StartupTrace.mark(this@MainActivity, "first-composition")
+            }
             val themeMode by appViewModel.themeMode.collectAsStateWithLifecycle()
             val appStyle by appViewModel.appStyle.collectAsStateWithLifecycle()
             val darkTheme = when (themeMode) {

@@ -20,7 +20,7 @@ interface TimeProvider {
      * 平时是空流；调试用的「时间快进」会发出信号，让各页面重新按新的「今天」计算。
      */
     val clockChanges: Flow<Unit> get() = emptyFlow()
-    fun today(): LocalDate = LocalDate.ofInstant(now(), zone())
+    fun today(): LocalDate = now().toLocalDate(zone())
 
     /** 当天结束的时刻（23:59:59.999），用于判断「今天到期」。 */
     fun endOfToday(): Instant = today().atTime(LocalTime.MAX).atZone(zone()).toInstant()

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 诊断包与正式包同装时靠名字区分，避免又点错图标 -->
+    <string name="app_name">喵记·诊断</string>
+    <string name="probe_label">喵记·探针</string>
+</resources>

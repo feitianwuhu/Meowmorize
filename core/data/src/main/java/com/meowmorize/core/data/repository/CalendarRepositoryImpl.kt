@@ -1,6 +1,7 @@
 package com.meowmorize.core.data.repository
 
 import com.meowmorize.core.common.time.TimeProvider
+import com.meowmorize.core.common.time.toLocalDate
 import com.meowmorize.core.data.mapper.reason
 import com.meowmorize.core.data.mapper.toModel
 import com.meowmorize.core.database.dao.DailyPlanDao
@@ -84,7 +85,7 @@ class CalendarRepositoryImpl @Inject constructor(
 
         val logsByDayAndItem: Map<Pair<LocalDate, Long>, ReviewLogEntity> = logs
             .groupBy {
-                LocalDate.ofInstant(Instant.ofEpochMilli(it.reviewedAt), timeProvider.zone()) to it.itemId
+                Instant.ofEpochMilli(it.reviewedAt).toLocalDate(timeProvider.zone()) to it.itemId
             }
             .mapValues { (_, entries) -> entries.maxBy { it.reviewedAt } }
 
@@ -92,7 +93,7 @@ class CalendarRepositoryImpl @Inject constructor(
 
         val stateTasksByDate: Map<LocalDate, List<ReviewStateEntity>> = states
             .filter { it.phase != com.meowmorize.core.model.LearningPhase.NEW.name }
-            .groupBy { LocalDate.ofInstant(Instant.ofEpochMilli(it.dueAt), timeProvider.zone()) }
+            .groupBy { Instant.ofEpochMilli(it.dueAt).toLocalDate(timeProvider.zone()) }
 
         val days = mutableMapOf<LocalDate, CalendarDay>()
         var cursor = start

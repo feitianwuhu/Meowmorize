@@ -338,17 +338,23 @@ if (到期分钟 > 2 × 基准容量) factor = min(factor, 0.90)   // 积压时�
 不可用时明确提示改走「粘贴文本」（编辑器内置按钮）或手动输入，
 不会让按钮静默失败。后续可替换为厂商 OCR 或云端识别，接口不变。
 
-### 5.8 兼容性笔记（v1.0.1）
+### 5.8 兼容性笔记（v1.0.3）
 
-v1.0.0 在部分 ROM（华为 HarmonyOS 4.2、小米澎湃 OS 1）上「点开即闪退」，而 Android 14/15 机器正常。
-排查后的处理：
+v1.0.0–1.0.2 在 Android 13 及以下的机型上「点开即闪退」，Android 14/15 正常。
+前两版先后怀疑过打包版 OCR 的原生库、native 库解压方式，都不是原因——真正的根因是
+一个 Java 标准库方法：
 
-| 原因候选 | 处理 |
+| 环节 | 说明 |
 | --- | --- |
-| 打包版 ML Kit 会在进程启动时经 `MlKitInitProvider` 加载 OCR 原生库，无 GMS / 部分国产 ROM 上加载失败 | 换成 GMS 按需下载版：APK 内不再有 ML Kit 的 `.so`，模型首次使用时由 Play 服务下载；OCR 入口会先检查可用性，不可用时明确提示改用「粘贴文本」 |
-| 未压缩 native 库由系统直接 mmap，少数 ROM 兼容性差 | `jniLibs.useLegacyPackaging = true`，改为安装时解压到 `lib/` |
-| `(view.context as Activity)` 在 OEM 包装 Context 时抛 `ClassCastException` | 改为逐层解包 `ContextWrapper`，取不到就跳过状态栏配色 |
-| 崩溃发生在 `Application` 之前，应用无法兜底 | 保留兜底：`Application` 安装未捕获异常处理器，把机型/系统/堆栈写入 `filesDir/crash-*.txt`，便于无 adb 取证 |
+| 根因 | `LocalDate.ofInstant(...)` 是 **Java 9** 追加的方法，Android 上要 **API 34** 才有实现。项目 `minSdk 29`、`compileSdk 37`，编译期完全合法，运行到「今天」页创建 ViewModel 取当天日期时抛 `NoSuchMethodError` |
+| 为什么难查 | 抛的是 `Error` 而不是 `Exception`，且崩溃发生在 Compose 首帧组合过程中——系统视为「首个 Activity 挂上之前就死了」，既不弹「应用停止运行」，应用也来不及画任何东西，用户看到的就是纯粹的闪烁 |
+| 为什么日志也没留 | 崩溃处理器被安装在 `Application.attachBaseContext`，却从 `context.applicationContext` 取 Context：该阶段这个值必为 `null`，处理器于是装上了却永远写不出文件。「没有日志」被误读成了「应用代码没跑」 |
+| 修复 | 统一改为 `Instant.atZone(zone).toLocalDate()`（API 26 起可用），共 7 处调用点 |
+| 兜底 | 处理器改为回退到传入的 Context，并前移到 `super.attachBaseContext` 之前；新增启动阶段记录，崩溃报告会附带「走到哪一步」 |
+
+留个教训在这里：`NewApi` 这类 lint 只比对 `android.jar`，抓不到「Java 标准库方法在低版本
+ART 上不存在」这一类问题。这类坑要么靠低版本真机覆盖，要么给模块开启 core library
+desugaring，从机制上把 `java.time` / `java.util` 的新增量统一降级。
 
 ## 六、界面：两套风格
 

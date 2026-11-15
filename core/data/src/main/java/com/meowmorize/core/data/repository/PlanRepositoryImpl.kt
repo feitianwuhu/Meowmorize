@@ -2,6 +2,7 @@ package com.meowmorize.core.data.repository
 
 import androidx.room.withTransaction
 import com.meowmorize.core.common.time.TimeProvider
+import com.meowmorize.core.common.time.toLocalDate
 import com.meowmorize.core.data.mapper.reason
 import com.meowmorize.core.data.mapper.toEntity
 import com.meowmorize.core.data.mapper.toModel
@@ -139,7 +140,7 @@ class PlanRepositoryImpl @Inject constructor(
     override suspend fun loadPlanInputs(now: Instant, endOfToday: Instant): PlanInputs {
         val items = itemDao.getActive().map(ItemEntity::toModel)
         val states = stateDao.getAll().associate { it.itemId to it.toModel() }
-        val today = LocalDate.ofInstant(now, timeProvider.zone())
+        val today = now.toLocalDate(timeProvider.zone())
 
         val due = mutableListOf<DueCandidate>()
         val newItems = mutableListOf<NewCandidate>()
@@ -149,7 +150,7 @@ class PlanRepositoryImpl @Inject constructor(
             if (state == null || state.isNew) {
                 newItems += NewCandidate(item)
             } else if (!state.dueAt.isAfter(endOfToday)) {
-                val dueDate = LocalDate.ofInstant(state.dueAt, timeProvider.zone())
+                val dueDate = state.dueAt.toLocalDate(timeProvider.zone())
                 val overdueDays = if (state.dueAt.isBefore(timeProvider.startOfDay(today))) {
                     ChronoUnit.DAYS.between(dueDate, today).coerceAtLeast(1)
                 } else {
@@ -310,7 +311,7 @@ class PlanRepositoryImpl @Inject constructor(
         val plannedPerDay = planItems.groupingBy { it.date }.eachCount()
         val completedPerDay = logs
             .filter { it.grade != RecallGrade.AGAIN.name }
-            .groupBy { LocalDate.ofInstant(Instant.ofEpochMilli(it.reviewedAt), timeProvider.zone()).toString() }
+            .groupBy { Instant.ofEpochMilli(it.reviewedAt).toLocalDate(timeProvider.zone()).toString() }
             .mapValues { entry -> entry.value.map { it.itemId }.distinct().size }
 
         return dates.mapNotNull { day ->
@@ -344,7 +345,7 @@ class PlanRepositoryImpl @Inject constructor(
             // 完成 = 当天评分过的计划内任务（「忘了」不算完成，避免把重练当成果）
             val doneIds = logs.filter {
                 it.grade != RecallGrade.AGAIN.name &&
-                    LocalDate.ofInstant(Instant.ofEpochMilli(it.reviewedAt), timeProvider.zone()) == day
+                    Instant.ofEpochMilli(it.reviewedAt).toLocalDate(timeProvider.zone()) == day
             }.map { it.itemId }.toSet()
             val completed = items.filter { it.itemId in doneIds }.sumOf { it.minutes }
             DayCompletion(plannedMinutes = planned, completedMinutes = completed)
