@@ -30,6 +30,18 @@ class SaveItemUseCase(
         }
     }
 
+    /** 彻底删除：内容、记忆状态与日志一起没了，因此 UI 必须二次确认。 */
+    suspend fun delete(itemId: Long) {
+        studyRepository.deleteItem(itemId)
+        refreshTodayPlan()
+    }
+
+    /** 删除学科，任务变成「未分类」而不是被删掉。 */
+    suspend fun deleteSubject(subjectId: Long) {
+        studyRepository.deleteSubject(subjectId)
+        refreshTodayPlan()
+    }
+
     suspend fun archive(itemId: Long) {
         studyRepository.archiveItem(itemId)
         refreshTodayPlan()

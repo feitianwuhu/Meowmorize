@@ -36,4 +36,8 @@ interface ItemDao {
 
     @Query("UPDATE items SET status = :status, updatedAt = :updatedAt WHERE id = :id")
     suspend fun setStatus(id: Long, status: String, updatedAt: Long)
+
+    /** 硬删除：记忆状态、复习日志、计划行由外键级联清理。 */
+    @Query("DELETE FROM items WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

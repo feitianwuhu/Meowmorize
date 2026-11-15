@@ -27,4 +27,11 @@ interface SubjectDao {
 
     @Update
     suspend fun update(entity: SubjectEntity)
+
+    @Query("SELECT COUNT(*) FROM items WHERE subjectId = :subjectId")
+    suspend fun itemCount(subjectId: Long): Int
+
+    /** 删除学科；该学科下的任务会被外键置为「未分类」，不会被连带删除。 */
+    @Query("DELETE FROM subjects WHERE id = :subjectId")
+    suspend fun deleteById(subjectId: Long)
 }

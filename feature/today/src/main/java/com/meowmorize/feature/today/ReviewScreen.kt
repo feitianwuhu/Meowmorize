@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meowmorize.core.designsystem.component.MarkdownText
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
+import com.meowmorize.core.designsystem.component.MeowDivider
 import com.meowmorize.core.designsystem.component.MeowIconButton
 import com.meowmorize.core.designsystem.component.PillTag
 import com.meowmorize.core.designsystem.component.SubjectLabel
@@ -176,7 +177,12 @@ fun ReviewScreen(
             // 两个显式动作：看答案、看提示。提示是「降低难度」，所以会记入本次复习。
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MeowChip(
-                    text = if (state.revealed) "内容已显示" else "显示内容",
+                    text = when {
+                        item.clozeAnswer != null && state.revealed -> "答案已显示"
+                        item.clozeAnswer != null -> "显示答案"
+                        state.revealed -> "内容已显示"
+                        else -> "显示内容"
+                    },
                     selected = state.revealed,
                     onClick = onReveal,
                 )
@@ -190,8 +196,37 @@ fun ReviewScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            val answer = item.clozeAnswer
             MeowCard {
-                if (state.revealed) {
+                if (answer != null) {
+                    // 填空题：题干始终可见，答案才需要「显示答案」。这才符合考试时的情境。
+                    if (item.contentFormat == ContentFormat.MARKDOWN) {
+                        MarkdownText(markdown = item.content.ifBlank { "这条任务还没有填写题干。" })
+                    } else {
+                        Text(
+                            text = item.content.ifBlank { "这条任务还没有填写题干。" },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (state.revealed) {
+                        MeowDivider()
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = "答案",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = answer.ifBlank { "（没有填写答案）" },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    } else {
+                        MeowChip(text = "显示答案", onClick = onReveal, selected = false)
+                    }
+                } else if (state.revealed) {
                     if (item.contentFormat == ContentFormat.MARKDOWN) {
                         MarkdownText(markdown = item.content.ifBlank { "这条任务还没有填写内容。" })
                     } else {
@@ -287,7 +322,7 @@ fun ReviewScreen(
             previews = state.previews,
             selectedGrade = state.selectedGrade,
             hintUsed = state.hintUsed,
-            enabled = !state.isSaving,
+            enabled = !state.isLocked,
             onSelect = onSelectGrade,
             onConfirm = onConfirm,
             modifier = Modifier.align(Alignment.BottomCenter),

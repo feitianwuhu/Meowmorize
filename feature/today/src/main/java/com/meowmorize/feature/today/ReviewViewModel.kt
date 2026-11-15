@@ -44,7 +44,15 @@ data class ReviewUiState(
     val deadlineAt: java.time.Instant? = null,
     /** 生效中的目标保持率：临近截止时会被临时提高。 */
     val targetRetention: Double = 0.9,
-)
+) {
+    /**
+     * 评分已提交后锁定按钮。
+     *
+     * 旧版只锁「保存中」，结果提示出现后仍能继续点档位并再次确认，
+     * 于是同一条内容被连续评分，间隔被推得很远——这是真实的 bug，不是用户手滑。
+     */
+    val isLocked: Boolean get() = isSaving || outcome != null
+}
 
 /**
  * 复习页状态机。
@@ -140,7 +148,8 @@ class ReviewViewModel @Inject constructor(
      * 用过提示后「轻松」不再可选择——这是提示的代价，避免提示被当成免费加成。
      */
     fun selectGrade(grade: RecallGrade) {
-        if (local.value.saving) return
+        // 已出结果就彻底锁定：包括「下一次见」提示出现的这段时间
+        if (local.value.saving || local.value.outcome != null) return
         if (grade == RecallGrade.EASY && local.value.hintUsed) return
         local.value = local.value.copy(revealed = true, selectedGrade = grade)
     }
@@ -148,7 +157,7 @@ class ReviewViewModel @Inject constructor(
     /** 点「下一步」：提交本次评分。 */
     fun confirm() {
         val grade = local.value.selectedGrade ?: return
-        if (local.value.saving) return
+        if (local.value.saving || local.value.outcome != null) return
         local.value = local.value.copy(saving = true)
         viewModelScope.launch {
             runCatching { gradeReview(itemId, grade, hintUsed = local.value.hintUsed) }

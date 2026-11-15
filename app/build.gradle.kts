@@ -23,8 +23,8 @@ android {
         applicationId = "com.meowmorize.app"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -73,6 +73,10 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // 把 .so 解压到 lib 目录，而不是运行时从 APK 直接 mmap。
+        // 少数 ROM（尤其老一些的华为/小米）对未压缩 native 库的加载有兼容问题，
+        // 表现为启动即崩、且崩溃发生在系统加载器里，应用无从兜底。
+        jniLibs.useLegacyPackaging = true
     }
 }
 

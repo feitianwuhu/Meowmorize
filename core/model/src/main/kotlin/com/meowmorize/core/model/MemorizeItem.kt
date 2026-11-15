@@ -71,6 +71,12 @@ data class MemorizeItem(
      * 并保证「考前至少还能再见一次」。
      */
     val deadlineAt: Instant? = null,
+    /**
+     * 填空题答案。非 null 表示这条内容按「题干 + 答案」处理：
+     * [content] 是题干（例如「第二次世界大战的特点为 ______」），
+     * 复习时题干直接可见，答案要点「显示答案」才出现。
+     */
+    val clozeAnswer: String? = null,
 ) {
     val isActive: Boolean get() = status == ItemStatus.ACTIVE
 
@@ -100,6 +106,8 @@ data class ItemDraft(
     val contentFormat: ContentFormat = ContentFormat.PLAIN,
     /** 背诵截止时间（考试/汇报），为空表示没有期限。 */
     val deadlineAt: Instant? = null,
+    /** 填空题答案；null 表示普通内容。 */
+    val clozeAnswer: String? = null,
 )
 
 /** 编辑任务时，用户对「是否更新排程」的选择。 */

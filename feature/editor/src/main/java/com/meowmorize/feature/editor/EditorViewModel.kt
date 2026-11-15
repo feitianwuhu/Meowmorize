@@ -37,6 +37,10 @@ data class EditorUiState(
     val contentFormat: ContentFormat = ContentFormat.PLAIN,
     /** 截止时间（考试/汇报），为空表示没有期限。 */
     val deadlineAt: Instant? = null,
+    /** 是否按「题干 + 答案」的填空题处理。 */
+    val clozeEnabled: Boolean = false,
+    /** 填空题答案。 */
+    val clozeAnswer: String = "",
     val priority: Priority = Priority.NORMAL,
     /** 编辑已有任务时，是否据此重置排程。 */
     val resetSchedule: Boolean = false,
@@ -51,6 +55,7 @@ data class EditorUiState(
     val error: String? = null,
     val saved: Boolean = false,
     val archived: Boolean = false,
+    val deleted: Boolean = false,
     val showNewSubjectDialog: Boolean = false,
     val newSubjectName: String = "",
     /** OCR（测试功能）状态。 */
@@ -119,6 +124,8 @@ class EditorViewModel @Inject constructor(
                 hint = item.hint.orEmpty(),
                 contentFormat = item.contentFormat,
                 deadlineAt = item.deadlineAt,
+                clozeEnabled = item.clozeAnswer != null,
+                clozeAnswer = item.clozeAnswer.orEmpty(),
                 priority = item.priority,
                 estimatedMinutes = item.estimatedMinutes,
                 durationInput = item.estimatedMinutes.toString(),
@@ -151,6 +158,22 @@ class EditorViewModel @Inject constructor(
 
     fun setDeadline(value: Instant?) {
         _uiState.update { it.copy(deadlineAt = value) }
+    }
+
+    /** 打开填空题模式时，如果题干里还没有空位，顺手补一个，省得用户自己找下划线。 */
+    fun setClozeEnabled(enabled: Boolean) {
+        _uiState.update { state ->
+            val content = if (enabled && !state.content.contains("___")) {
+                if (state.content.isBlank()) "______" else state.content.trimEnd() + " ______"
+            } else {
+                state.content
+            }
+            state.copy(clozeEnabled = enabled, content = content)
+        }
+    }
+
+    fun setClozeAnswer(value: String) {
+        _uiState.update { it.copy(clozeAnswer = value) }
     }
 
     fun setContentFormat(format: ContentFormat) {
@@ -283,6 +306,25 @@ class EditorViewModel @Inject constructor(
         _uiState.update { it.copy(ocrMessage = null) }
     }
 
+    /**
+     * 删除这条任务。内容、记忆进度与复习日志会被一并清除，
+     * 因此调用方必须先弹确认框——这里不做二次询问。
+     */
+    fun delete() {
+        val current = original.value ?: return
+        if (_uiState.value.isSaving) return
+        _uiState.update { it.copy(isSaving = true, error = null) }
+        viewModelScope.launch {
+            runCatching { saveItem.delete(current.id) }
+                .onSuccess { _uiState.update { it.copy(isSaving = false, deleted = true) } }
+                .onFailure {
+                    _uiState.update { state ->
+                        state.copy(isSaving = false, error = "删除失败：${it.message ?: "未知错误"}")
+                    }
+                }
+        }
+    }
+
     fun save() {
         val state = _uiState.value
         if (!state.canSave) return
@@ -304,6 +346,7 @@ class EditorViewModel @Inject constructor(
                             hint = state.hint.takeIf { it.isNotBlank() },
                             contentFormat = state.contentFormat,
                             deadlineAt = state.deadlineAt,
+                            clozeAnswer = if (state.clozeEnabled) state.clozeAnswer.trim() else null,
                         ),
                     )
                 } else {
@@ -319,6 +362,7 @@ class EditorViewModel @Inject constructor(
                             hint = state.hint.trim().takeIf { it.isNotBlank() },
                             contentFormat = state.contentFormat,
                             deadlineAt = state.deadlineAt,
+                            clozeAnswer = if (state.clozeEnabled) state.clozeAnswer.trim() else null,
                         ),
                         policy = if (state.resetSchedule) {
                             ScheduleUpdatePolicy.RESET_SCHEDULE

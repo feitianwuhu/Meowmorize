@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -102,8 +103,8 @@ fun EditorRoute(
         uri?.let { viewModel.recognizeImage(it.toString()) }
     }
 
-    LaunchedEffect(state.saved, state.archived) {
-        if (state.saved || state.archived) onDone()
+    LaunchedEffect(state.saved, state.archived, state.deleted) {
+        if (state.saved || state.archived || state.deleted) onDone()
     }
 
     EditorScreen(
@@ -122,6 +123,9 @@ fun EditorRoute(
         onNewSubject = viewModel::openNewSubjectDialog,
         onHintChange = viewModel::setHint,
         onDeadlineChange = viewModel::setDeadline,
+        onClozeEnabledChange = viewModel::setClozeEnabled,
+        onClozeAnswerChange = viewModel::setClozeAnswer,
+        onDelete = viewModel::delete,
         onContentFormatChange = viewModel::setContentFormat,
         onDurationInputChange = viewModel::setDurationInput,
         onTakePhoto = {
@@ -163,6 +167,7 @@ fun EditorRoute(
             shape = RoundedCornerShape(26.dp),
         )
     }
+
 }
 
 @Composable
@@ -182,6 +187,9 @@ fun EditorScreen(
     onNewSubject: () -> Unit,
     onHintChange: (String) -> Unit,
     onDeadlineChange: (java.time.Instant?) -> Unit,
+    onClozeEnabledChange: (Boolean) -> Unit,
+    onClozeAnswerChange: (String) -> Unit,
+    onDelete: () -> Unit,
     onContentFormatChange: (ContentFormat) -> Unit,
     onDurationInputChange: (String) -> Unit,
     onTakePhoto: () -> Unit,
@@ -190,6 +198,7 @@ fun EditorScreen(
     onDismissOcrMessage: () -> Unit,
 ) {
     var markdownPreview by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     if (state.isLoading) {
@@ -219,7 +228,7 @@ fun EditorScreen(
                     onClick = onBack,
                 )
                 Spacer(Modifier.size(12.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = if (state.isEditing) "编辑任务" else "新增背诵任务",
                         style = MaterialTheme.typography.headlineSmall,
@@ -229,6 +238,13 @@ fun EditorScreen(
                         text = if (state.isEditing) "修改后排程是否更新，由你决定" else "内容越具体，复习时越容易想起来",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (state.isEditing) {
+                    MeowIconButton(
+                        icon = Icons.Rounded.DeleteOutline,
+                        contentDescription = "删除任务",
+                        onClick = { showDeleteDialog = true },
                     )
                 }
             }
@@ -319,6 +335,12 @@ fun EditorScreen(
                     )
                 }
                 MeowChip(
+                    text = if (state.clozeEnabled) "填空题" else "转填空",
+                    selected = state.clozeEnabled,
+                    onClick = { onClozeEnabledChange(!state.clozeEnabled) },
+                )
+                Spacer(Modifier.size(8.dp))
+                MeowChip(
                     text = if (state.contentFormat == ContentFormat.MARKDOWN) "高级已开" else "高级",
                     selected = state.contentFormat == ContentFormat.MARKDOWN,
                     onClick = {
@@ -381,6 +403,20 @@ fun EditorScreen(
                     singleLine = false,
                     minLines = 6,
                     maxLines = 14,
+                )
+            }
+
+            if (state.clozeEnabled) {
+                Spacer(Modifier.height(12.dp))
+                MeowTextField(
+                    value = state.clozeAnswer,
+                    onValueChange = onClozeAnswerChange,
+                    label = "答案",
+                    placeholder = "例：突发性、破坏性、广泛性、不确定性",
+                    singleLine = false,
+                    minLines = 2,
+                    maxLines = 5,
+                    supportingText = "题干里用 ______ 表示要填的位置；复习时题干可见，答案点「显示答案」才出现",
                 )
             }
 
@@ -637,6 +673,33 @@ fun EditorScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("删除这条任务？") },
+            text = {
+                Text(
+                    "内容、背诵记录与复习日志会一起删除，无法恢复。" +
+                        "如果只是暂时不想背，可以在任务库里归档，随时能恢复。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        onDelete()
+                    },
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
+            },
+            shape = RoundedCornerShape(26.dp),
+        )
     }
 }
 

@@ -87,6 +87,7 @@ class StudyRepositoryImpl @Inject constructor(
             hint = draft.hint?.trim()?.takeIf { it.isNotEmpty() },
             contentFormat = draft.contentFormat.name,
             deadlineAt = draft.deadlineAt?.toEpochMilli(),
+            clozeAnswer = draft.clozeAnswer,
         )
         return itemDao.insert(entity)
     }
@@ -112,6 +113,16 @@ class StudyRepositoryImpl @Inject constructor(
             reviewStateDao.delete(item.id)
         }
     }
+
+    override suspend fun deleteItem(id: Long) {
+        itemDao.deleteById(id)
+    }
+
+    override suspend fun deleteSubject(id: Long) {
+        subjectDao.deleteById(id)
+    }
+
+    override suspend fun subjectItemCount(id: Long): Int = subjectDao.itemCount(id)
 
     override suspend fun archiveItem(id: Long) {
         itemDao.setStatus(id, ItemStatus.ARCHIVED.name, timeProvider.now().toEpochMilli())

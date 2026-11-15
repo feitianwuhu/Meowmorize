@@ -1,6 +1,8 @@
 package com.meowmorize.app
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,7 +41,9 @@ class MainActivity : ComponentActivity() {
             val view = LocalView.current
             if (!view.isInEditMode) {
                 SideEffect {
-                    val window = (view.context as Activity).window
+                    // 不要直接 `as Activity`：部分 ROM 会给 View 套 ContextThemeWrapper，
+                    // 强转会在首帧抛 ClassCastException，表现为「点开就闪退」。
+                    val window = view.context.findActivity()?.window ?: return@SideEffect
                     val controller = WindowCompat.getInsetsController(window, view)
                     val lightBars = !darkTheme && appStyle != AppStyle.TERMINAL
                     controller.isAppearanceLightStatusBars = lightBars
@@ -52,4 +56,14 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/** 沿 ContextWrapper 逐层解包，取出真正的 Activity；取不到就返回 null。 */
+private fun Context.findActivity(): Activity? {
+    var context: Context = this
+    while (context is ContextWrapper) {
+        if (context is Activity) return context
+        context = context.baseContext
+    }
+    return null
 }

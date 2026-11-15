@@ -41,4 +41,6 @@ data class ItemEntity(
     val contentFormat: String = "PLAIN",
     /** 背诵截止时间（考试/汇报），为空表示没有期限。 */
     val deadlineAt: Long? = null,
+    /** 填空题答案；null 表示普通内容。 */
+    val clozeAnswer: String? = null,
 )

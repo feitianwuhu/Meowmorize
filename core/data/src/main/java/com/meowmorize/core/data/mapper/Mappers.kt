@@ -65,6 +65,7 @@ fun ItemEntity.toModel(): MemorizeItem = MemorizeItem(
     hint = hint,
     contentFormat = ContentFormat.fromName(contentFormat),
     deadlineAt = deadlineAt?.let(Instant::ofEpochMilli),
+    clozeAnswer = clozeAnswer,
 )
 
 fun MemorizeItem.toEntity(): ItemEntity = ItemEntity(
@@ -83,6 +84,7 @@ fun MemorizeItem.toEntity(): ItemEntity = ItemEntity(
     hint = hint,
     contentFormat = contentFormat.name,
     deadlineAt = deadlineAt?.toEpochMilli(),
+    clozeAnswer = clozeAnswer,
 )
 
 fun ReviewStateEntity.toModel(): ReviewState = ReviewState(

@@ -38,6 +38,15 @@ interface StudyRepository {
      */
     suspend fun updateItem(item: MemorizeItem, policy: ScheduleUpdatePolicy)
 
+    /** 彻底删除任务：内容、记忆状态、复习日志一并清除，不可恢复。 */
+    suspend fun deleteItem(id: Long)
+
+    /** 删除学科；该学科下的任务变为「未分类」，不删除任务。 */
+    suspend fun deleteSubject(id: Long)
+
+    /** 该学科下有多少条任务（删除前提示用）。 */
+    suspend fun subjectItemCount(id: Long): Int
+
     suspend fun archiveItem(id: Long)
 
     suspend fun restoreItem(id: Long)

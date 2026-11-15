@@ -38,9 +38,9 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 | 场景 | 能力 |
 | --- | --- |
 | 今日 | 打开即生成当日计划；完成度环形进度；负荷档位（轻松/标准/冲刺）；算法解释卡；一键调整今日任务量 |
-| 背诵 | 先回忆、再揭晓；「显示提示」会展示用户自写的线索并禁用「轻松」；四档自评点一下先展开答案，该档变成「下一步」，可改选，再确认才落库；有截止日期时顶部显示倒计时与生效保持率，反复遗忘时给出改写建议 |
+| 背诵 | 先回忆、再揭晓；「显示提示」会展示用户自写的线索并禁用「轻松」；四档自评点一下先展开答案，该档变成「下一步」，可改选，再确认才落库，**出结果后按钮整体锁定**；支持**填空题**（题干可见、答案才需揭示）；有截止日期时显示倒计时与生效保持率，反复遗忘时给出改写建议 |
 | 日历 | 月视图：学科色点表示已排任务、空心点表示「按曲线推算会到期」；点选某天查看任务与完成情况，可直接进入背诵 |
-| 任务库 | 搜索（主题/内容/来源）、按学科筛选、显示归档；**6 种排序**：最近更新 / 最近创建 / 下次复习 / 主题名称（拼音）/ 预计用时 / 优先级 |
+| 任务库 | 搜索（主题/内容/来源）、按学科筛选、显示归档；**6 种排序**：最近更新 / 最近创建 / 下次复习 / 主题名称（拼音）/ 预计用时 / 优先级；**删除任务**；**管理学科（可删除学科，任务转为未分类）** |
 | 新增/编辑 | 学科、主题、内容、来源、优先级、**背诵提示**、**截止日期**；背诵用时自动估算且可 **+/- 或直接输入**；内容支持 **Markdown 高级模式**（标题/列表/引用/两栏对照 + 快捷插入 + 预览）；**OCR 取字（测试）** 提供拍照 / 相册 / 粘贴三条路径；编辑时可选择「保持排程」或「重新学习」 |
 | 设置 | 每日容量、新任务上限、目标保持率、自动减负、周末放宽、主题；**界面风格（柔角卡片 / 终端）**；**复习算法参数**（最长间隔 / 同日上限 / 难度回归 / 间隔抖动 / leech 阈值，可一键恢复默认）；**弹性实验**（今天状态 / 分钟完成率 / 学科配额，默认关）；**系统日历同步**；**时间快进（测试）**；重排今日计划 |
 
@@ -130,7 +130,7 @@ subjects 1 ──── * items 1 ──── 1 review_states
 | 表 | 主要字段 | 说明 |
 | --- | --- | --- |
 | `subjects` | `id, name(unique), colorArgb, sortOrder, weight, examAt` | 学科，名字唯一；`weight` 供配额分配，`examAt` 作为任务截止日期的兜底 |
-| `items` | `id, subjectId(FK, SET_NULL), topic, content, hint, contentFormat, source, priority, status, estimatedMinutes, durationIsCustom, deadlineAt, createdAt, updatedAt, revision` | `revision` 每次内容变更自增；`durationIsCustom` 区分手填/估算；`deadlineAt` 为考试/汇报截止 |
+| `items` | `id, subjectId(FK, SET_NULL), topic, content, hint, contentFormat, source, priority, status, estimatedMinutes, durationIsCustom, deadlineAt, clozeAnswer, createdAt, updatedAt, revision` | `revision` 每次内容变更自增；`durationIsCustom` 区分手填/估算；`deadlineAt` 为考试/汇报截止；`clozeAnswer` 非空表示这条按「题干 + 答案」的填空题处理 |
 | `review_states` | `itemId(PK, FK CASCADE), dueAt, stability, difficulty, reps, lapses, phase, lastReviewedAt, scheduledDays, leech, leechSince, learningStep, sameDayReps` | 与任务一对一；`leech` 为「反复遗忘」标记，只提示不改算法 |
 | `review_logs` | `id, itemId(FK), reviewedAt, grade, intervalBefore, intervalAfter, stabilityAfter, phaseAfter, itemRevision, elapsedDays, scheduledDueAt, stabilityBefore, difficultyBefore, difficultyAfter, retrievability, hintUsed, wasOverdue, actualMs` | 只追加；后九个字段用于回溯与将来做参数校准 |
 | `daily_plans` | `date(PK), generatedAt, capacityMinutes, plannedMinutes, loadLevel, targetRetention, elasticityFactor, backlogCount, newCount, notes, userAdjusted, baselinePlannedMinutes, baselineTaskCount, todayState` | `baseline*` 是当天首次生成的快照，重排不覆盖，保证完成率分母不被改写 |
@@ -143,12 +143,12 @@ DataStore 的异步 API 会带来「启动瞬间算错日期」的窗口，这�
 
 ### 4.3 迁移策略
 
-- 版本号 `4`：`MIGRATION_1_2` 增加 `durationIsCustom` 与 `calendar_sync`；
+- 版本号 `5`：`MIGRATION_1_2` 增加 `durationIsCustom` 与 `calendar_sync`；
   `MIGRATION_2_3` 增加 `hint` / `contentFormat`；`MIGRATION_3_4` 增加观测字段、
   截止日期、学科权重、leech 标记与计划快照。
 - 新增列一律 `@ColumnInfo(defaultValue = …)` 且迁移 SQL 带同样的 `DEFAULT`，
   保证「新装」与「升级」得到完全一致的 schema——两者不一致时 Room 会在启动校验时报错。
-- `schemas/` 下的 `1.json`~`4.json` 纳入版本控制，可据此生成迁移测试。
+- `schemas/` 下的 `1.json`~`5.json` 纳入版本控制，可据此生成迁移测试。
 - 仅对「降级」保留兜底重建，正常升级永远走迁移。
 
 ---
@@ -228,6 +228,18 @@ if (到期分钟 > 2 × 基准容量) factor = min(factor, 0.90)   // 积压时�
   只做提示（复习页黄字、建议改写或拆分），不自动删除、不改 `S`——
   这类内容的问题通常在「写得太长/没有线索」，而不是复习次数不够。
 
+### 5.2.3 填空题（题干 + 答案）
+
+历史、政治这类内容常常是「一句话挖空」：`第二次世界大战的特点为 ______`。
+这类内容不该被当成「整段文字背下来」，因此新增 `clozeAnswer`：
+
+- 非空即进入填空题模式，`content` 视作题干（可用 `______` 标出空位）；
+- 复习时**题干始终可见**，答案要点「显示答案」才出现——这才是考试时的情境；
+- 编辑器里有「转填空」开关，开启时若题干没有下划线会自动补一个，并出现答案输入框。
+
+数据是「普通内容 + 可选答案」而不是两张表：一条内容随时可以转成/退出填空题，
+排程与复习记录完全连续，不需要重建。
+
 ### 5.3 背诵用时：估算 + 用户覆盖
 
 - 默认按「内容字数 ÷ 200 字/分钟 × 2 遍 + 1 分钟准备」估算，范围 3~60 分钟；
@@ -300,6 +312,18 @@ if (到期分钟 > 2 × 基准容量) factor = min(factor, 0.90)   // 积压时�
 识别结果追加到内容末尾。由于 ML Kit 依赖 Google Play 服务，界面会先读取可用性：
 不可用时明确提示改走「粘贴文本」（编辑器内置按钮）或手动输入，
 不会让按钮静默失败。后续可替换为厂商 OCR 或云端识别，接口不变。
+
+### 5.8 兼容性笔记（v1.0.1）
+
+v1.0.0 在部分 ROM（华为 HarmonyOS 4.2、小米澎湃 OS 1）上「点开即闪退」，而 Android 14/15 机器正常。
+排查后的处理：
+
+| 原因候选 | 处理 |
+| --- | --- |
+| 打包版 ML Kit 会在进程启动时经 `MlKitInitProvider` 加载 OCR 原生库，无 GMS / 部分国产 ROM 上加载失败 | 换成 GMS 按需下载版：APK 内不再有 ML Kit 的 `.so`，模型首次使用时由 Play 服务下载；OCR 入口会先检查可用性，不可用时明确提示改用「粘贴文本」 |
+| 未压缩 native 库由系统直接 mmap，少数 ROM 兼容性差 | `jniLibs.useLegacyPackaging = true`，改为安装时解压到 `lib/` |
+| `(view.context as Activity)` 在 OEM 包装 Context 时抛 `ClassCastException` | 改为逐层解包 `ContextWrapper`，取不到就跳过状态栏配色 |
+| 崩溃发生在 `Application` 之前，应用无法兜底 | 保留兜底：`Application` 安装未捕获异常处理器，把机型/系统/堆栈写入 `filesDir/crash-*.txt`，便于无 adb 取证 |
 
 ## 六、界面：两套风格
 

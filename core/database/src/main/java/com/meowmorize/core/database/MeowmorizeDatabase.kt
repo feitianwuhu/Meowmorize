@@ -32,7 +32,7 @@ import com.meowmorize.core.database.entity.SubjectEntity
         DailyPlanItemEntity::class,
         CalendarSyncEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class MeowmorizeDatabase : RoomDatabase() {

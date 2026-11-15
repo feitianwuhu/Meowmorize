@@ -29,8 +29,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore.preferences)
 
-    // OCR：中文 + 拉丁文字识别（测试功能，依赖 Google Play 服务）
-    implementation(libs.mlkit.text.recognition)
+    // OCR：中文 + 拉丁文字识别（测试功能）。
+    // 只引 GMS 版：模型首次使用时下载，APK 不含原生库，也不会在启动时初始化 ML Kit。
     implementation(libs.mlkit.text.recognition.chinese)
 
     implementation(libs.hilt.android)

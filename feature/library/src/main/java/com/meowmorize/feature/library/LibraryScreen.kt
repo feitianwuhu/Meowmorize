@@ -21,6 +21,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +49,7 @@ import com.meowmorize.core.designsystem.theme.LocalAppStyle
 import com.meowmorize.core.designsystem.theme.displayName
 import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.model.ItemStatus
+import com.meowmorize.core.model.Subject
 import com.meowmorize.core.model.TaskSortOrder
 import java.time.Instant
 
@@ -66,6 +70,12 @@ fun LibraryRoute(
         onToggleArchived = viewModel::toggleArchived,
         onArchive = viewModel::archive,
         onRestore = viewModel::restore,
+        onManageSubjects = viewModel::openSubjectManager,
+        onDismissSubjectManager = viewModel::dismissSubjectManager,
+        onDeleteSubject = viewModel::requestDeleteSubject,
+        onDeleteItem = viewModel::requestDeleteItem,
+        onCancelDelete = viewModel::cancelDelete,
+        onConfirmDelete = viewModel::confirmDelete,
     )
 }
 
@@ -80,6 +90,12 @@ fun LibraryScreen(
     onToggleArchived: () -> Unit,
     onArchive: (Long) -> Unit,
     onRestore: (Long) -> Unit,
+    onManageSubjects: () -> Unit,
+    onDismissSubjectManager: () -> Unit,
+    onDeleteSubject: (Subject) -> Unit,
+    onDeleteItem: (Long, String) -> Unit,
+    onCancelDelete: () -> Unit,
+    onConfirmDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val now = Instant.now()
@@ -138,6 +154,13 @@ fun LibraryScreen(
                         selected = state.selectedSubjectId == subject.id,
                         color = Color(subject.colorArgb),
                         onClick = { onSelectSubject(subject.id) },
+                    )
+                }
+                item {
+                    FilterChip(
+                        text = "管理学科",
+                        selected = false,
+                        onClick = onManageSubjects,
                     )
                 }
             }
@@ -202,9 +225,94 @@ fun LibraryScreen(
                     onClick = { onEditTask(ui.item.id) },
                     onArchive = { onArchive(ui.item.id) },
                     onRestore = { onRestore(ui.item.id) },
+                    onDelete = { onDeleteItem(ui.item.id, ui.item.topic) },
                 )
             }
         }
+    }
+
+    if (state.subjectManagerVisible) {
+        AlertDialog(
+            onDismissRequest = onDismissSubjectManager,
+            title = { Text("管理学科") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (state.subjects.isEmpty()) {
+                        Text(
+                            text = "还没有学科。新增任务时可以顺手创建。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    state.subjects.forEach { subject ->
+                        val count = state.subjectItemCounts[subject.id] ?: 0
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SubjectDot(color = Color(subject.colorArgb))
+                            Spacer(Modifier.size(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = subject.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = if (count > 0) "$count 条任务" else "暂无任务",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            MeowTextButton(
+                                text = "删除",
+                                onClick = { onDeleteSubject(subject) },
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissSubjectManager) { Text("完成") }
+            },
+            shape = RoundedCornerShape(26.dp),
+        )
+    }
+
+    val pending = state.pendingDelete
+    if (pending != null) {
+        AlertDialog(
+            onDismissRequest = onCancelDelete,
+            title = {
+                Text(
+                    when (pending) {
+                        is DeleteRequest.Item -> "删除这条任务？"
+                        is DeleteRequest.Subject -> "删除学科「${pending.name}」？"
+                    },
+                )
+            },
+            text = {
+                Text(
+                    when (pending) {
+                        is DeleteRequest.Item ->
+                            "内容、背诵记录与复习日志会一起删除，无法恢复。只是暂时不想背的话，用「归档」更合适。"
+                        is DeleteRequest.Subject ->
+                            if (pending.itemCount > 0) {
+                                "该学科下的 ${pending.itemCount} 条任务不会被删除，会变成「未分类」。"
+                            } else {
+                                "这个学科下没有任务，可以放心删除。"
+                            }
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = onConfirmDelete) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onCancelDelete) { Text("取消") }
+            },
+            shape = RoundedCornerShape(26.dp),
+        )
     }
 }
 
@@ -242,6 +350,7 @@ private fun LibraryItemCard(
     onClick: () -> Unit,
     onArchive: () -> Unit,
     onRestore: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val archived = ui.item.status == ItemStatus.ARCHIVED
     val subjectColor = ui.subject?.let { Color(it.colorArgb) } ?: MaterialTheme.colorScheme.outline
@@ -295,6 +404,11 @@ private fun LibraryItemCard(
             } else {
                 MeowTextButton(text = "归档", onClick = onArchive, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            MeowTextButton(
+                text = "删除",
+                onClick = onDelete,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
     }
 }
