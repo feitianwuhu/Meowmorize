@@ -28,6 +28,9 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 它用 FSRS 遗忘曲线决定**该复习什么**，用弹性容量规则决定**今天该复习多少**，
 并把这套判断的依据直接摊开给用户看。
 
+> 更完整的项目介绍（含算法细节与设计取舍）：**[docs/INTRO.md](docs/INTRO.md)**
+> 需要发到微信的场景，用纯文本版：[docs/INTRO-wechat.txt](docs/INTRO-wechat.txt)
+
 ---
 
 ## 零、下载与安装
@@ -426,7 +429,7 @@ Meowmorize/
 │   └── designsystem/             # 主题与通用组件
 ├── feature/
 │   ├── today/  calendar/  library/  editor/  settings/
-├── docs/branding/                # README 用的图标
+├── docs/                         # 项目介绍（Markdown / 微信纯文本）、图标
 ├── tools/generate_icons.py       # 从源图生成全套启动图标（纯标准库）
 ├── .github/                      # CI、issue/PR 模板、dependabot
 ├── gradle/libs.versions.toml     # 版本目录
