@@ -23,8 +23,8 @@ android {
         applicationId = "com.meowmorize.app"
         minSdk = 29
         targetSdk = 37
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
@@ -65,6 +65,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+        // 把 java.time / java.util 里「Java 9+ 追加、Android 高版本才有」的库 API
+        // 统一降级到 minSdk 29。v1.0.0~v1.0.2 的启动闪退就是踩在这里：
+        // LocalDate.ofInstant 要 API 34，编译期完全合法，运行期 NoSuchMethodError。
+        isCoreLibraryDesugaringEnabled = true
     }
 
     buildFeatures {
@@ -99,4 +103,6 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
