@@ -3,6 +3,8 @@ package com.meowmorize.app
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,6 +42,10 @@ class MainActivity : ComponentActivity() {
             }
             val themeMode by appViewModel.themeMode.collectAsStateWithLifecycle()
             val appStyle by appViewModel.appStyle.collectAsStateWithLifecycle()
+            val updatePrompt by appViewModel.updatePrompt.collectAsStateWithLifecycle()
+
+            // 启动时按设置的开关检查一次更新（内部有 6 小时节流，关掉开关则完全不查）
+            androidx.compose.runtime.LaunchedEffect(Unit) { appViewModel.checkUpdateOnStart() }
             val darkTheme = when (themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
                 ThemeMode.LIGHT -> false
@@ -62,6 +68,21 @@ class MainActivity : ComponentActivity() {
 
             MeowTheme(style = appStyle, darkTheme = darkTheme) {
                 MeowmorizeApp()
+
+                updatePrompt?.let { info ->
+                    UpdateAvailableDialog(
+                        info = info,
+                        onDismiss = appViewModel::dismissUpdatePrompt,
+                        onOpen = { url ->
+                            runCatching {
+                                startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
+                    )
+                }
             }
         }
     }

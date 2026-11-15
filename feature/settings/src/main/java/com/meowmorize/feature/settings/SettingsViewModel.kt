@@ -5,10 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.meowmorize.core.common.time.TimeProvider
 import com.meowmorize.core.domain.repository.CalendarSyncRepository
 import com.meowmorize.core.domain.repository.CalendarSyncResult
+import com.meowmorize.core.domain.app.AppVersionProvider
 import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.domain.repository.TimeTravelRepository
+import com.meowmorize.core.domain.usecase.CheckUpdateUseCase
 import com.meowmorize.core.domain.usecase.PrepareTodayPlanUseCase
 import com.meowmorize.core.domain.usecase.SyncUpcomingToCalendarUseCase
+import com.meowmorize.core.domain.usecase.UpdateCheckResult
 import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.model.ThemeMode
 import com.meowmorize.core.model.UserSettings
@@ -35,9 +38,22 @@ data class SettingsUiState(
     val hasCalendarPermission: Boolean = false,
     val isSyncing: Boolean = false,
     val message: String? = null,
+    val update: UpdateUiState = UpdateUiState(),
 ) {
     val clockShifted: Boolean get() = clockOffsetMillis != 0L
 }
+
+/**
+ * 「检查更新」这一小块的状态。
+ *
+ * 结果一直留着（而不是查完就弹一次提示）：用户可能切走再回来，
+ * 版本信息不该凭空消失。
+ */
+data class UpdateUiState(
+    val currentVersion: String = "",
+    val checking: Boolean = false,
+    val result: UpdateCheckResult? = null,
+)
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -47,6 +63,8 @@ class SettingsViewModel @Inject constructor(
     private val syncUpcomingToCalendar: SyncUpcomingToCalendarUseCase,
     private val prepareTodayPlan: PrepareTodayPlanUseCase,
     private val timeProvider: TimeProvider,
+    private val checkUpdate: CheckUpdateUseCase,
+    private val appVersionProvider: AppVersionProvider,
 ) : ViewModel() {
 
     private data class LocalState(
@@ -56,6 +74,8 @@ class SettingsViewModel @Inject constructor(
     )
 
     private val local = MutableStateFlow(LocalState(hasPermission = calendarSyncRepository.hasPermission()))
+
+    private val updateState = MutableStateFlow(UpdateUiState(currentVersion = appVersionProvider.versionName()))
 
     /** 每秒刷新一次虚拟时间，让「当前应用时间」是活的。 */
     private val clockTicker = flow {
@@ -69,7 +89,8 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.settings,
         clockTicker,
         local,
-    ) { settings, now, mutation ->
+        updateState,
+    ) { settings, now, mutation, update ->
         SettingsUiState(
             settings = settings,
             virtualNow = now,
@@ -77,6 +98,7 @@ class SettingsViewModel @Inject constructor(
             hasCalendarPermission = mutation.hasPermission,
             isSyncing = mutation.isSyncing,
             message = mutation.message,
+            update = update,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -85,6 +107,7 @@ class SettingsViewModel @Inject constructor(
             virtualNow = timeTravelRepository.virtualNow(),
             clockOffsetMillis = timeTravelRepository.offsetMillis(),
             hasCalendarPermission = calendarSyncRepository.hasPermission(),
+            update = UpdateUiState(currentVersion = appVersionProvider.versionName()),
         ),
     )
 
@@ -274,6 +297,40 @@ class SettingsViewModel @Inject constructor(
         result.permissionDenied -> "没有日历权限，请先授权"
         result.failed -> "系统日历不可用，同步失败"
         else -> "$fallback：${result.synced} 条已同步，${result.removed} 条已移除"
+    }
+
+    // ---------- 检查更新 ----------
+
+    /**
+     * 手动检查更新。
+     *
+     * 只查、不装：查到新版本后要不要装由用户点「去下载」自己决定，
+     * 不会出现「打开应用就被替换掉」的意外。
+     */
+    fun checkForUpdate() {
+        if (updateState.value.checking) return
+        viewModelScope.launch {
+            updateState.value = updateState.value.copy(checking = true, result = null)
+            val result = checkUpdate()
+            updateState.value = UpdateUiState(
+                currentVersion = result.currentVersion,
+                checking = false,
+                result = result,
+            )
+            // 手动查过就刷新节流时间，免得刚查完重启又发一次请求
+            persistOnly { it.copy(lastUpdateCheckAt = System.currentTimeMillis()) }
+        }
+    }
+
+    /** 启动时自动检查的开关。只影响「查不查」，不影响「装不装」。 */
+    fun setAutoCheckUpdate(enabled: Boolean) = persistOnly { it.copy(autoCheckUpdate = enabled) }
+
+    /** 只落盘，不触发今日计划重排——这类设置跟排程无关。 */
+    private fun persistOnly(transform: (UserSettings) -> UserSettings) {
+        viewModelScope.launch {
+            runCatching { settingsRepository.update(transform) }
+                .onFailure { local.value = local.value.copy(message = "设置保存失败") }
+        }
     }
 
     private fun updateAlgorithm(transform: (UserSettings) -> UserSettings) {

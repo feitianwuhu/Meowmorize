@@ -7,6 +7,8 @@ import com.meowmorize.core.data.repository.CalendarRepositoryImpl
 import com.meowmorize.core.data.repository.PlanRepositoryImpl
 import com.meowmorize.core.data.time.AdjustableTimeProvider
 import com.meowmorize.core.data.settings.SettingsRepositoryImpl
+import com.meowmorize.core.data.update.AndroidAppVersionProvider
+import com.meowmorize.core.data.update.GitHubUpdateRepository
 import com.meowmorize.core.data.repository.StudyRepositoryImpl
 import com.meowmorize.core.domain.repository.CalendarRepository
 import com.meowmorize.core.domain.repository.CalendarSyncRepository
@@ -15,10 +17,13 @@ import com.meowmorize.core.domain.repository.PlanRepository
 import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.domain.repository.StudyRepository
 import com.meowmorize.core.domain.repository.TimeTravelRepository
+import com.meowmorize.core.domain.repository.UpdateRepository
 import com.meowmorize.core.domain.plan.TodayPlanGenerator
 import com.meowmorize.core.domain.srs.FsrsScheduler
 import com.meowmorize.core.domain.text.DurationEstimator
 import com.meowmorize.core.domain.usecase.GradeReviewUseCase
+import com.meowmorize.core.domain.app.AppVersionProvider
+import com.meowmorize.core.domain.usecase.CheckUpdateUseCase
 import com.meowmorize.core.domain.usecase.PrepareTodayPlanUseCase
 import com.meowmorize.core.domain.usecase.SaveItemUseCase
 import com.meowmorize.core.domain.usecase.SyncUpcomingToCalendarUseCase
@@ -57,6 +62,14 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindOcrRepository(impl: MlKitOcrRepository): OcrRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUpdateRepository(impl: GitHubUpdateRepository): UpdateRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppVersionProvider(impl: AndroidAppVersionProvider): AppVersionProvider
 
     /** 同一个实例同时提供「当前时间」与「时间快进」能力，保证两边看到的偏移一致。 */
     @Binds
@@ -150,5 +163,15 @@ object DomainModule {
         prepareTodayPlan = prepareTodayPlanUseCase,
         timeProvider = timeProvider,
         syncCalendar = syncCalendar,
+    )
+
+    @Provides
+    @Singleton
+    fun provideCheckUpdateUseCase(
+        updateRepository: UpdateRepository,
+        appVersionProvider: AppVersionProvider,
+    ): CheckUpdateUseCase = CheckUpdateUseCase(
+        updateRepository = updateRepository,
+        appVersionProvider = appVersionProvider,
     )
 }

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.meowmorize.core.domain.repository.SettingsRepository
@@ -62,6 +63,8 @@ class SettingsRepositoryImpl @Inject constructor(
             librarySortOrder = TaskSortOrder.fromName(this[Keys.LIBRARY_SORT]),
             appStyle = AppStyle.fromName(this[Keys.APP_STYLE]),
             onboarded = this[Keys.ONBOARDED] ?: defaults.onboarded,
+            autoCheckUpdate = this[Keys.AUTO_CHECK_UPDATE] ?: defaults.autoCheckUpdate,
+            lastUpdateCheckAt = this[Keys.LAST_UPDATE_CHECK] ?: defaults.lastUpdateCheckAt,
             maxIntervalDays = this[Keys.MAX_INTERVAL_DAYS] ?: defaults.maxIntervalDays,
             intervalFuzzEnabled = this[Keys.INTERVAL_FUZZ] ?: defaults.intervalFuzzEnabled,
             leechThreshold = this[Keys.LEECH_THRESHOLD] ?: defaults.leechThreshold,
@@ -92,6 +95,8 @@ class SettingsRepositoryImpl @Inject constructor(
         this[Keys.LIBRARY_SORT] = settings.librarySortOrder.name
         this[Keys.APP_STYLE] = settings.appStyle.name
         this[Keys.ONBOARDED] = settings.onboarded
+        this[Keys.AUTO_CHECK_UPDATE] = settings.autoCheckUpdate
+        this[Keys.LAST_UPDATE_CHECK] = settings.lastUpdateCheckAt
         this[Keys.MAX_INTERVAL_DAYS] = settings.maxIntervalDays
         this[Keys.INTERVAL_FUZZ] = settings.intervalFuzzEnabled
         this[Keys.LEECH_THRESHOLD] = settings.leechThreshold
@@ -172,6 +177,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val LIBRARY_SORT = stringPreferencesKey("library_sort_order")
         val APP_STYLE = stringPreferencesKey("app_style")
         val ONBOARDED = booleanPreferencesKey("onboarded")
+        val AUTO_CHECK_UPDATE = booleanPreferencesKey("auto_check_update")
+        val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
         val CALENDAR_SYNC_ENABLED = booleanPreferencesKey("calendar_sync_enabled")
         val CALENDAR_SYNC_WINDOW = intPreferencesKey("calendar_sync_window_hours")
         val MAX_INTERVAL_DAYS = intPreferencesKey("srs_max_interval_days")

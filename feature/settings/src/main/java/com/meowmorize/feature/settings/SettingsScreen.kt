@@ -1,6 +1,8 @@
 package com.meowmorize.feature.settings
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +56,7 @@ import com.meowmorize.core.designsystem.component.SectionHeader
 import com.meowmorize.core.designsystem.theme.LocalMeowColors
 import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.model.ThemeMode
+import com.meowmorize.core.domain.usecase.UpdateCheckResult
 import com.meowmorize.core.model.UserSettings
 import java.time.LocalDate
 import java.time.ZoneId
@@ -63,6 +67,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // 日历权限必须由 Activity 申请；拿到结果后交给 ViewModel 继续同步
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -109,6 +114,17 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         },
         onSyncWindowChange = viewModel::setSyncWindowHours,
         onSyncNow = viewModel::syncNow,
+        onCheckUpdate = viewModel::checkForUpdate,
+        onAutoCheckChange = viewModel::setAutoCheckUpdate,
+        onOpenUrl = { url ->
+            // 只负责「把用户送到能下载的地方」，安装仍由系统安装器接管
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        },
     )
 }
 
@@ -141,9 +157,13 @@ fun SettingsScreen(
     onToggleCalendarSync: (Boolean) -> Unit,
     onSyncWindowChange: (Int) -> Unit,
     onSyncNow: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onAutoCheckChange: (Boolean) -> Unit,
+    onOpenUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val settings = state.settings
+    val update = state.update
     val context = LocalContext.current
     val virtualDateTime = state.virtualNow.atZone(ZoneId.systemDefault())
 
@@ -587,6 +607,76 @@ fun SettingsScreen(
             }
 
             item {
+                MeowCard {
+                    SectionHeader(
+                        title = "检查更新",
+                        subtitle = "只在你点的时候更新，不会自动下载安装",
+                    )
+                    MeowSwitchRow(
+                        title = "启动时检查更新",
+                        description = "打开后每次启动最多查一次，6 小时内不重复",
+                        checked = settings.autoCheckUpdate,
+                        onCheckedChange = onAutoCheckChange,
+                        icon = Icons.Rounded.Refresh,
+                    )
+                    MeowDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "当前版本 ${update.currentVersion}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = when (val result = update.result) {
+                                    null -> "尚未检查"
+                                    is UpdateCheckResult.UpToDate -> "已是最新版本"
+                                    is UpdateCheckResult.Failed -> "检查失败：${result.message}"
+                                    is UpdateCheckResult.Available -> "有可用的新版本"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        MeowOutlinedButton(
+                            text = if (update.checking) "检查中…" else "检查更新",
+                            enabled = !update.checking,
+                            onClick = onCheckUpdate,
+                        )
+                    }
+
+                    val available = update.result as? UpdateCheckResult.Available
+                    if (available != null) {
+                        MeowDivider()
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = "新版本 ${available.update.versionName}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = available.update.notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 8,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        MeowPrimaryButton(
+                            text = "去下载",
+                            onClick = { onOpenUrl(available.update.bestUrl) },
+                        )
+                    }
+                }
+            }
+
+            item {
                 // 用主题面（而非透明）保证终端/深色下这一栏不会浮出浅色底
                 MeowCard {
                     MeowSettingRow(
@@ -595,7 +685,7 @@ fun SettingsScreen(
                         description = "所有背诵内容与复习记录都保存在这台设备上",
                     )
                     Text(
-                        text = "Meowmorize 1.0.0 · Android 10+",
+                        text = "Meowmorize ${state.update.currentVersion} · Android 10+",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 10.dp),

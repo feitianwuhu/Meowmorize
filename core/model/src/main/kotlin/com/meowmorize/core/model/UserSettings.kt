@@ -40,6 +40,10 @@ data class UserSettings(
     val librarySortOrder: TaskSortOrder = TaskSortOrder.RECENT_UPDATED,
     /** 是否已完成新手引导（用于首次进入时插入示例数据说明）。 */
     val onboarded: Boolean = false,
+    /** 启动时是否自动检查更新。只提示新版本，不自动下载、不自动安装。 */
+    val autoCheckUpdate: Boolean = true,
+    /** 上次检查更新的时间戳（毫秒）。仅用于节流，不出现在界面上。 */
+    val lastUpdateCheckAt: Long = 0L,
 
     // ---------- 复习算法可调参数 ----------
     // 这些值都直接进入 FSRS 排程，改完下一次评分就生效，不需要重建数据。
