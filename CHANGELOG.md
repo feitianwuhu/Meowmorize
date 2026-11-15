@@ -7,6 +7,26 @@
 
 （暂无）
 
+## [1.0.4] - 2026-11-15
+
+这一版只动构建与工具链，功能与 1.0.3 一致。
+
+### 变更
+- 开启 **core library desugaring**：`java.time` / `java.util` 里「Java 9+ 追加、Android 高版本才有」
+  的库 API（如 `LocalDate.ofInstant`）统一降级到 minSdk 29，从机制上堵住 1.0.3 修的那类
+  `NoSuchMethodError`——以后即使有人写出同样的调用，也不会再在低版本设备上崩
+- 依赖升级：AGP `9.4.0 → 9.5.1`、Gradle `9.6.0 → 9.9.1`
+
+### 修复
+- `gradlew` 在仓库里丢了可执行位（`100644`），Linux / macOS 克隆后 `./gradlew` 直接
+  `Permission denied`；改回 `100755`
+- CI 工作流恢复并修正两处：`android-actions/setup-android` 在新版 cmdline-tools 上会去装
+  已下线的 `tools` 包，改为直接用 runner 自带的 SDK
+
+### 新增
+- CI 增加门禁：提交里出现 `LocalDate.ofInstant` 等「低版本缺失的 Java API」直接失败
+  （注释中提及不算），避免同类问题再次流到真机
+
 ## [1.0.3] - 2026-11-15
 
 ### 修复
