@@ -411,6 +411,8 @@ private fun GradeBar(
                 MeowOutlinedButton(
                     text = if (hintVisible) "收起提示" else "显示提示",
                     onClick = onToggleHint,
+                    // 评分结果浮层出现后（isLocked）不该还能翻提示
+                    enabled = enabled,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(10.dp))
