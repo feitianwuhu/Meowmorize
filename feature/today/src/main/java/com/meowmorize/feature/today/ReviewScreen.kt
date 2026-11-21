@@ -175,23 +175,25 @@ fun ReviewScreen(
             Spacer(Modifier.height(16.dp))
 
             // 两个显式动作：看答案、看提示。提示是「降低难度」，所以会记入本次复习。
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MeowChip(
-                    text = when {
-                        item.clozeAnswer != null && state.revealed -> "答案已显示"
-                        item.clozeAnswer != null -> "显示答案"
-                        state.revealed -> "内容已显示"
-                        else -> "显示内容"
-                    },
-                    selected = state.revealed,
-                    onClick = onReveal,
-                )
-                if (hasHint) {
-                    MeowChip(
-                        text = if (state.hintVisible) "隐藏提示" else "显示提示",
-                        selected = state.hintVisible,
-                        onClick = if (state.hintVisible) onHideHint else onShowHint,
-                    )
+            // 填空题的「显示答案」放在卡片里、紧贴答案位置，这里不再重复放一个：
+            // 同一屏出现两个一模一样的按钮，用户只会以为点错了。
+            val showRevealChip = item.clozeAnswer == null
+            if (showRevealChip || hasHint) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (showRevealChip) {
+                        MeowChip(
+                            text = if (state.revealed) "内容已显示" else "显示内容",
+                            selected = state.revealed,
+                            onClick = onReveal,
+                        )
+                    }
+                    if (hasHint) {
+                        MeowChip(
+                            text = if (state.hintVisible) "隐藏提示" else "显示提示",
+                            selected = state.hintVisible,
+                            onClick = if (state.hintVisible) onHideHint else onShowHint,
+                        )
+                    }
                 }
             }
 

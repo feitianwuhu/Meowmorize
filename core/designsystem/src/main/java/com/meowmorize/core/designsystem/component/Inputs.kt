@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -205,6 +208,8 @@ fun MeowSettingRow(
     description: String? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    /** 右侧显示「可进入下一级」的箭头。用于设置主页的分组入口。 */
+    showChevron: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -232,6 +237,14 @@ fun MeowSettingRow(
                 text = value,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (showChevron) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

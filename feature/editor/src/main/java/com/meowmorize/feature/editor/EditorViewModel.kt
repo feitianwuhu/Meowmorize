@@ -160,16 +160,15 @@ class EditorViewModel @Inject constructor(
         _uiState.update { it.copy(deadlineAt = value) }
     }
 
-    /** 打开填空题模式时，如果题干里还没有空位，顺手补一个，省得用户自己找下划线。 */
+    /**
+     * 切换填空题模式。
+     *
+     * 只切开关，**不改动正文**。之前会在题干末尾自动补 `______`，
+     * 但空位本来就可能出现在句子中间，自动补的那个反而要用户手动删掉；
+     * 题干怎么写应该由用户决定。
+     */
     fun setClozeEnabled(enabled: Boolean) {
-        _uiState.update { state ->
-            val content = if (enabled && !state.content.contains("___")) {
-                if (state.content.isBlank()) "______" else state.content.trimEnd() + " ______"
-            } else {
-                state.content
-            }
-            state.copy(clozeEnabled = enabled, content = content)
-        }
+        _uiState.update { it.copy(clozeEnabled = enabled) }
     }
 
     fun setClozeAnswer(value: String) {

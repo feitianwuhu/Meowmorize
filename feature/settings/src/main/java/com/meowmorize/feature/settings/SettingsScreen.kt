@@ -3,10 +3,11 @@ package com.meowmorize.feature.settings
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,59 +16,57 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.SelfImprovement
-import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Weekend
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowDivider
-import com.meowmorize.core.designsystem.component.MeowOutlinedButton
-import com.meowmorize.core.designsystem.component.MeowTextButton
-import com.meowmorize.core.designsystem.component.MeowPrimaryButton
-import com.meowmorize.core.designsystem.component.MeowSegmented
 import com.meowmorize.core.designsystem.component.MeowSettingRow
-import com.meowmorize.core.designsystem.component.MeowSliderRow
-import com.meowmorize.core.designsystem.component.MeowStepper
-import com.meowmorize.core.designsystem.component.MeowSwitchRow
 import com.meowmorize.core.designsystem.component.SectionHeader
-import com.meowmorize.core.designsystem.theme.LocalMeowColors
-import com.meowmorize.core.model.AppStyle
-import com.meowmorize.core.model.ThemeMode
-import com.meowmorize.core.domain.usecase.UpdateCheckResult
-import com.meowmorize.core.model.UserSettings
-import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
+/**
+ * 设置入口。
+ *
+ * 结构上做了两件事：
+ * 1. **分二级页面**：主页只留分组入口与一行摘要，具体参数进各自页面改。
+ *    调「今日节奏」时不该被算法参数干扰，反之亦然。
+ * 2. **可搜索**：想改哪一项直接搜名字，命中后跳到它所在的分组。
+ *
+ * 功能一项没少——只是从「一屏到底」换成了「主页摘要 + 二级页面」。
+ */
 @Composable
 fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // 用字符串保存，rememberSaveable 才能跨进程重建；枚举本身不可直接存取
+    var openGroupName by rememberSaveable { mutableStateOf<String?>(null) }
+    val openGroup = openGroupName?.let { name -> SettingsGroup.entries.firstOrNull { it.name == name } }
 
     // 日历权限必须由 Activity 申请；拿到结果后交给 ViewModel 继续同步
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -76,622 +75,52 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         if (result.values.all { it }) viewModel.onPermissionGranted() else viewModel.onPermissionDenied()
     }
 
-    SettingsScreen(
-        state = state,
-        onCapacityChange = viewModel::setCapacityMinutes,
-        onMaxNewChange = viewModel::setMaxNewPerDay,
-        onRetentionChange = viewModel::setTargetRetention,
-        onAdaptiveChange = viewModel::setAdaptiveLoad,
-        onWeekendChange = viewModel::setWeekendRelief,
-        onThemeChange = viewModel::setTheme,
-        onStyleChange = viewModel::setAppStyle,
-        onRegeneratePlan = viewModel::regenerateTodayPlan,
-        onDismissMessage = viewModel::dismissMessage,
-        onTodayStateEnabledChange = viewModel::setTodayStateEnabled,
-        onMinuteCompletionChange = viewModel::setMinuteCompletion,
-        onSubjectQuotaChange = viewModel::setSubjectQuota,
-        onTrendWindowChange = viewModel::setTrendWindow,
-        onSubjectSharesChange = viewModel::setSubjectShares,
-        onMaxIntervalChange = viewModel::setMaxIntervalDays,
-        onFuzzChange = viewModel::setIntervalFuzz,
-        onLeechThresholdChange = viewModel::setLeechThreshold,
-        onDifficultyReversionChange = viewModel::setDifficultyReversion,
-        onSameDayRepeatChange = viewModel::setSameDayRepeatLimit,
-        onResetAlgorithm = viewModel::resetAlgorithmDefaults,
-        onAdvanceClock = viewModel::advanceByDays,
-        onJumpToDateTime = viewModel::jumpTo,
-        onResetClock = viewModel::resetClock,
-        onToggleCalendarSync = { enabled ->
-            if (!enabled) {
-                viewModel.disableCalendarSync()
-            } else if (state.hasCalendarPermission) {
-                viewModel.enableCalendarSync()
-            } else {
-                permissionLauncher.launch(
-                    arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
-                )
-            }
-        },
-        onSyncWindowChange = viewModel::setSyncWindowHours,
-        onSyncNow = viewModel::syncNow,
-        onCheckUpdate = viewModel::checkForUpdate,
-        onAutoCheckChange = viewModel::setAutoCheckUpdate,
-        onOpenUrl = { url ->
-            // 只负责「把用户送到能下载的地方」，安装仍由系统安装器接管
-            runCatching {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            }
-        },
-    )
-}
-
-@Composable
-fun SettingsScreen(
-    state: SettingsUiState,
-    onCapacityChange: (Int) -> Unit,
-    onMaxNewChange: (Int) -> Unit,
-    onRetentionChange: (Double) -> Unit,
-    onAdaptiveChange: (Boolean) -> Unit,
-    onWeekendChange: (Boolean) -> Unit,
-    onThemeChange: (ThemeMode) -> Unit,
-    onStyleChange: (AppStyle) -> Unit,
-    onRegeneratePlan: () -> Unit,
-    onDismissMessage: () -> Unit,
-    onTodayStateEnabledChange: (Boolean) -> Unit,
-    onMinuteCompletionChange: (Boolean) -> Unit,
-    onSubjectQuotaChange: (Boolean) -> Unit,
-    onTrendWindowChange: (Int) -> Unit,
-    onSubjectSharesChange: (Double, Double) -> Unit,
-    onMaxIntervalChange: (Int) -> Unit,
-    onFuzzChange: (Boolean) -> Unit,
-    onLeechThresholdChange: (Int) -> Unit,
-    onDifficultyReversionChange: (Double) -> Unit,
-    onSameDayRepeatChange: (Int) -> Unit,
-    onResetAlgorithm: () -> Unit,
-    onAdvanceClock: (Long) -> Unit,
-    onJumpToDateTime: (LocalDate, Int, Int) -> Unit,
-    onResetClock: () -> Unit,
-    onToggleCalendarSync: (Boolean) -> Unit,
-    onSyncWindowChange: (Int) -> Unit,
-    onSyncNow: () -> Unit,
-    onCheckUpdate: () -> Unit,
-    onAutoCheckChange: (Boolean) -> Unit,
-    onOpenUrl: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val settings = state.settings
-    val update = state.update
-    val context = LocalContext.current
-    val virtualDateTime = state.virtualNow.atZone(ZoneId.systemDefault())
-
-    LaunchedEffect(state.message) {
-        if (state.message != null) {
-            delay(2400)
-            onDismissMessage()
+    val onToggleCalendarSync: (Boolean) -> Unit = { enabled ->
+        when {
+            !enabled -> viewModel.disableCalendarSync()
+            state.hasCalendarPermission -> viewModel.enableCalendarSync()
+            else -> permissionLauncher.launch(
+                arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
+            )
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
-            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            item {
-                Column {
-                    Text(
-                        text = "设置",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = "所有参数都可以随时改，改完立刻生效",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+    val onOpenUrl: (String) -> Unit = { url ->
+        // 只负责把用户送到能下载的地方，安装仍由系统安装器接管
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
 
-            item {
-                MeowCard {
-                    SectionHeader(
-                        title = "今日节奏",
-                        subtitle = "决定算法每天敢给你排多少任务",
-                    )
-                    MeowSliderRow(
-                        title = "每日可投入时间",
-                        valueText = "${settings.dailyCapacityMinutes} 分钟",
-                        value = settings.dailyCapacityMinutes.toFloat(),
-                        onValueChange = { onCapacityChange(it.roundToInt()) },
-                        valueRange = UserSettings.MIN_CAPACITY_MINUTES.toFloat()..
-                            UserSettings.MAX_CAPACITY_MINUTES.toFloat(),
-                        description = "这是基准容量，忙碌时会自动下调",
-                    )
-                    MeowDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "每日新任务上限",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = "新学内容不会挤掉到期复习",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        MeowStepper(
-                            value = settings.maxNewPerDay,
-                            onValueChange = onMaxNewChange,
-                            min = UserSettings.MIN_NEW_PER_DAY,
-                            max = UserSettings.MAX_NEW_PER_DAY,
-                        )
-                    }
-                    MeowDivider()
-                    MeowSliderRow(
-                        title = "目标记忆保持率",
-                        valueText = "${(settings.targetRetention * 100).roundToInt()}%",
-                        value = settings.targetRetention.toFloat(),
-                        onValueChange = { onRetentionChange(it.toDouble()) },
-                        valueRange = UserSettings.MIN_RETENTION.toFloat()..UserSettings.MAX_RETENTION.toFloat(),
-                        description = "越高复习越频繁：90% 是大多数人的舒适档",
-                    )
-                }
-            }
+    // 二级页面用返回键回到主页，而不是直接退出应用
+    BackHandler(enabled = openGroup != null) { openGroupName = null }
 
-            item {
-                MeowCard {
-                    SectionHeader(title = "弹性规则", subtitle = "让计划跟着生活走，而不是反过来")
-                    MeowSwitchRow(
-                        title = "近期完成率偏低时自动减负",
-                        description = "连续没完成时，容量会自动下调，先找回节奏",
-                        checked = settings.adaptiveLoadEnabled,
-                        onCheckedChange = onAdaptiveChange,
-                        icon = Icons.Rounded.AutoAwesome,
-                    )
-                    MeowDivider()
-                    MeowSwitchRow(
-                        title = "周末放宽",
-                        description = "周六周日的容量按 85% 计算",
-                        checked = settings.weekendReliefEnabled,
-                        onCheckedChange = onWeekendChange,
-                        icon = Icons.Rounded.Weekend,
-                    )
-                }
-            }
+    // 提示条自动消失。放在 Route 而不是主页：二级页里触发的提示同样要自己消失
+    LaunchedEffect(state.message) {
+        if (state.message != null) {
+            delay(2400)
+            viewModel.dismissMessage()
+        }
+    }
 
-            item {
-                MeowCard {
-                    SectionHeader(
-                        title = "弹性实验",
-                        subtitle = "默认关闭；打开后可以对比「算法是不是更懂我」",
-                    )
-                    MeowSwitchRow(
-                        title = "今天的状态入口",
-                        description = "首页多三枚胶囊：累了 / 正常 / 状态不错。只影响当天，跨天自动失效",
-                        checked = settings.todayStateEnabled,
-                        onCheckedChange = onTodayStateEnabledChange,
-                        icon = Icons.Rounded.SelfImprovement,
-                    )
-                    MeowDivider()
-                    MeowSwitchRow(
-                        title = "按分钟计算完成率",
-                        description = "现在按「条数」算，一道 30 分钟的题和 5 分钟的一样重；切到分钟更接近真实负担",
-                        checked = settings.minuteCompletionEnabled,
-                        onCheckedChange = onMinuteCompletionChange,
-                        icon = Icons.Rounded.Timer,
-                    )
-                    if (settings.minuteCompletionEnabled) {
-                        MeowSliderRow(
-                            title = "趋势窗口",
-                            valueText = "${settings.trendWindowDays} 天",
-                            value = settings.trendWindowDays.toFloat(),
-                            onValueChange = { onTrendWindowChange(it.toInt()) },
-                            valueRange = 3f..14f,
-                            description = "识别连续下滑与恢复期用；样本不足 3 天不会调整",
-                        )
-                    }
-                    MeowDivider()
-                    MeowSwitchRow(
-                        title = "学科配额与轮换",
-                        description = "过载时按学科分容量，避免某一科连续几天吃满，其他科目被饿死",
-                        checked = settings.subjectQuotaEnabled,
-                        onCheckedChange = onSubjectQuotaChange,
-                        icon = Icons.Rounded.CalendarMonth,
-                    )
-                    if (settings.subjectQuotaEnabled) {
-                        MeowSliderRow(
-                            title = "单科最小份额",
-                            valueText = "${(settings.subjectMinShare * 100).toInt()}%",
-                            value = settings.subjectMinShare.toFloat(),
-                            onValueChange = {
-                                onSubjectSharesChange(it.toDouble(), settings.subjectMaxShare)
-                            },
-                            valueRange = 0.10f..0.40f,
-                            description = "任何学科都不至于整天排不进去",
-                        )
-                        MeowSliderRow(
-                            title = "单科最大份额",
-                            valueText = "${(settings.subjectMaxShare * 100).toInt()}%",
-                            value = settings.subjectMaxShare.toFloat(),
-                            onValueChange = {
-                                onSubjectSharesChange(settings.subjectMinShare, it.toDouble())
-                            },
-                            valueRange = 0.40f..0.80f,
-                            description = "避免某一科挤占整天",
-                        )
-                    }
-                }
-            }
-
-            item {
-                MeowCard {
-                    SectionHeader(
-                        title = "复习算法",
-                        subtitle = "改完下一次评分就生效，不会重算历史",
-                    )
-                    MeowSliderRow(
-                        title = "最长间隔",
-                        valueText = if (settings.maxIntervalDays >= 365) {
-                            "1 年"
-                        } else {
-                            "${settings.maxIntervalDays} 天"
-                        },
-                        value = settings.maxIntervalDays.toFloat(),
-                        onValueChange = { onMaxIntervalChange(it.toInt()) },
-                        valueRange = 30f..365f,
-                        description = "再熟的内容也会在这个期限内再见一次；设短一些更适合应付考试",
-                    )
-                    MeowDivider()
-                    MeowSliderRow(
-                        title = "同日重练上限",
-                        valueText = "${settings.sameDayRepeatLimit} 次",
-                        value = settings.sameDayRepeatLimit.toFloat(),
-                        onValueChange = { onSameDayRepeatChange(it.toInt()) },
-                        valueRange = 1f..5f,
-                        steps = 3,
-                        description = "一天内反复「忘了」超过这个次数，就冷却 6 小时再来，避免硬耗",
-                    )
-                    MeowDivider()
-                    MeowSliderRow(
-                        title = "难度回归强度",
-                        valueText = String.format(java.util.Locale.CHINA, "%.3f", settings.difficultyReversion),
-                        value = settings.difficultyReversion.toFloat(),
-                        onValueChange = { onDifficultyReversionChange(it.toDouble()) },
-                        valueRange = 0f..0.2f,
-                        description = "越大越容易把难度拉回「较简单」，长期记得的内容会更早复习完",
-                    )
-                    MeowDivider()
-                    MeowSwitchRow(
-                        title = "间隔抖动",
-                        description = "同一批内容不再同一天到期，代价是间隔不再精确可预期",
-                        checked = settings.intervalFuzzEnabled,
-                        onCheckedChange = onFuzzChange,
-                        icon = Icons.Rounded.AutoAwesome,
-                    )
-                    MeowDivider()
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "反复遗忘提示阈值",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = "遗忘 ${settings.leechThreshold} 次后标记为「反复遗忘」，建议改写或拆分",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        MeowStepper(
-                            value = settings.leechThreshold,
-                            onValueChange = onLeechThresholdChange,
-                            min = UserSettings.MIN_LEECH_THRESHOLD,
-                            max = UserSettings.MAX_LEECH_THRESHOLD,
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    MeowTextButton(text = "恢复算法默认值", onClick = onResetAlgorithm)
-                }
-            }
-
-            item {
-                MeowCard {
-                    SectionHeader(
-                        title = "系统日历同步",
-                        subtitle = "把接下来要做的事放进手机日历",
-                    )
-                    MeowSwitchRow(
-                        title = "同步未来 ${settings.calendarSyncWindowHours} 小时的任务",
-                        description = if (settings.calendarSyncEnabled) {
-                            "任务更新后自动同步；关闭会同时移除已写入的日程"
-                        } else {
-                            "默认关闭，开启需要日历读写权限"
-                        },
-                        checked = settings.calendarSyncEnabled,
-                        onCheckedChange = onToggleCalendarSync,
-                        icon = Icons.Rounded.CalendarMonth,
-                    )
-                    MeowDivider()
-                    Text(
-                        text = "同步窗口",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                    Text(
-                        text = "只同步这段时间内到期的任务，避免把整个任务库塞进日历",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(12, 24, 48, 72).forEach { hours ->
-                            ActionChip(
-                                text = "${hours} 小时",
-                                selected = settings.calendarSyncWindowHours == hours,
-                                onClick = { onSyncWindowChange(hours) },
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        MeowOutlinedButton(
-                            text = if (state.isSyncing) "同步中…" else "立即同步",
-                            onClick = onSyncNow,
-                            enabled = settings.calendarSyncEnabled && !state.isSyncing,
-                            icon = Icons.Rounded.Refresh,
-                        )
-                        if (!state.hasCalendarPermission) {
-                            Text(
-                                text = "未授权",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = LocalMeowColors.current.warning,
-                            )
-                        }
-                    }
-                }
-            }
-
-            item {
-                MeowCard {
-                    SectionHeader(title = "界面风格", subtitle = "两套信息组织方式，不是简单换色")
-                    MeowSegmented(
-                        options = listOf("柔角卡片", "终端"),
-                        selectedIndex = AppStyle.entries.indexOf(settings.appStyle),
-                        onSelect = { index -> onStyleChange(AppStyle.entries[index]) },
-                    )
-                    Text(
-                        text = if (settings.appStyle == AppStyle.TERMINAL) {
-                            "终端：深蓝黑底、等宽数字、规格条与曲线。固定深色，不提供主题切换。"
-                        } else {
-                            "柔角卡片：大圆角、柔和层次、暖橙强调、环形进度。"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-
-                    // 终端风格固定深色，主题模式没有意义，直接不展示
-                    if (settings.appStyle != AppStyle.TERMINAL) {
-                        Spacer(Modifier.height(16.dp))
-                        MeowDivider()
-                        SectionHeader(title = "主题模式")
-                        MeowSegmented(
-                            options = listOf("跟随系统", "浅色", "深色"),
-                            selectedIndex = ThemeMode.entries.indexOf(settings.themeMode),
-                            onSelect = { index -> onThemeChange(ThemeMode.entries[index]) },
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-            }
-
-            item {
-                MeowCard(containerColor = MaterialTheme.colorScheme.surface) {
-                    SectionHeader(title = "算法说明", subtitle = "看得懂，才敢放心用")
-                    Text(
-                        text = "复习时间由 FSRS 遗忘曲线模型计算：每条内容维护「稳定性」与「难度」，" +
-                            "按你每次的自评更新，目标是让复习发生在「快要忘记」的时候，而不是固定隔几天。" +
-                            "每天的条数则受容量与弹性规则约束：宁可顺延，也不超发。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    MeowOutlinedButton(
-                        text = "重新生成今日计划",
-                        onClick = onRegeneratePlan,
-                        icon = Icons.Rounded.Refresh,
-                    )
-                }
-            }
-
-            item {
-                MeowCard(containerColor = LocalMeowColors.current.containerLow, borderColor = Color.Transparent) {
-                    SectionHeader(
-                        title = "测试工具 · 时间快进",
-                        subtitle = "验证遗忘曲线，不用真的等一周",
-                    )
-                    Text(
-                        text = "当前应用时间：" + virtualDateTime.format(
-                            DateTimeFormatter.ofPattern("M 月 d 日 HH:mm"),
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (state.clockShifted) {
-                            val days = state.clockOffsetMillis / 86_400_000.0
-                            "已偏移约 " + String.format(java.util.Locale.CHINA, "%.1f", days) + " 天"
-                        } else {
-                            "与真实时间一致"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-
-                    Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(1L, 3L, 7L, 30L).forEach { days ->
-                            ActionChip(
-                                text = "+$days 天",
-                                selected = false,
-                                onClick = { onAdvanceClock(days) },
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        MeowOutlinedButton(
-                            text = "选择日期与时间",
-                            onClick = {
-                                DatePickerDialog(
-                                    context,
-                                    { _, year, month, day ->
-                                        TimePickerDialog(
-                                            context,
-                                            { _, hour, minute ->
-                                                onJumpToDateTime(
-                                                    LocalDate.of(year, month + 1, day),
-                                                    hour,
-                                                    minute,
-                                                )
-                                            },
-                                            virtualDateTime.hour,
-                                            virtualDateTime.minute,
-                                            true,
-                                        ).show()
-                                    },
-                                    virtualDateTime.year,
-                                    virtualDateTime.monthValue - 1,
-                                    virtualDateTime.dayOfMonth,
-                                ).show()
-                            },
-                        )
-                        Spacer(Modifier.weight(1f))
-                        MeowTextButton(
-                            text = "回到真实时间",
-                            onClick = onResetClock,
-                            color = if (state.clockShifted) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                        )
-                    }
-                    Text(
-                        text = "快进会改变「今天」的判定、到期任务与日历同步结果，仅建议在测试时使用。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            item {
-                MeowCard {
-                    SectionHeader(
-                        title = "检查更新",
-                        subtitle = "只在你点的时候更新，不会自动下载安装",
-                    )
-                    MeowSwitchRow(
-                        title = "启动时检查更新",
-                        description = "打开后每次启动最多查一次，6 小时内不重复",
-                        checked = settings.autoCheckUpdate,
-                        onCheckedChange = onAutoCheckChange,
-                        icon = Icons.Rounded.Refresh,
-                    )
-                    MeowDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "当前版本 ${update.currentVersion}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = when (val result = update.result) {
-                                    null -> "尚未检查"
-                                    is UpdateCheckResult.UpToDate -> "已是最新版本"
-                                    is UpdateCheckResult.Failed -> "检查失败：${result.message}"
-                                    is UpdateCheckResult.Available -> "有可用的新版本"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        MeowOutlinedButton(
-                            text = if (update.checking) "检查中…" else "检查更新",
-                            enabled = !update.checking,
-                            onClick = onCheckUpdate,
-                        )
-                    }
-
-                    val available = update.result as? UpdateCheckResult.Available
-                    if (available != null) {
-                        MeowDivider()
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            text = "新版本 ${available.update.versionName}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = available.update.notes,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 8,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        MeowPrimaryButton(
-                            text = "去下载",
-                            onClick = { onOpenUrl(available.update.bestUrl) },
-                        )
-                    }
-                }
-            }
-
-            item {
-                // 用主题面（而非透明）保证终端/深色下这一栏不会浮出浅色底
-                MeowCard {
-                    MeowSettingRow(
-                        title = "数据存储",
-                        value = "仅本地",
-                        description = "所有背诵内容与复习记录都保存在这台设备上",
-                    )
-                    Text(
-                        text = "Meowmorize ${state.update.currentVersion} · Android 10+",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 10.dp),
-                    )
-                }
-            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (openGroup == null) {
+            SettingsHome(
+                state = state,
+                onOpenGroup = { group -> openGroupName = group.name },
+            )
+        } else {
+            SettingsGroupPage(
+                group = openGroup,
+                state = state,
+                viewModel = viewModel,
+                onBack = { openGroupName = null },
+                onToggleCalendarSync = onToggleCalendarSync,
+                onOpenUrl = onOpenUrl,
+            )
         }
 
         if (state.message != null) {
@@ -699,7 +128,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 110.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
                     .padding(horizontal = 18.dp, vertical = 10.dp),
             ) {
@@ -713,25 +142,229 @@ fun SettingsScreen(
     }
 }
 
-/** 设置页用小胶囊按钮（快捷加量、快捷快进）。 */
 @Composable
-private fun ActionChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
+private fun SettingsHome(
+    state: SettingsUiState,
+    onOpenGroup: (SettingsGroup) -> Unit,
 ) {
-    val accent = MaterialTheme.colorScheme.primary
-    Box(
-        modifier = Modifier
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(if (selected) accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+    var query by rememberSaveable { mutableStateOf("") }
+    val keyword = query.trim()
+    val hits = remember(keyword) {
+        if (keyword.isBlank()) {
+            emptyList()
+        } else {
+            ALL_HITS.filter {
+                it.title.contains(keyword, ignoreCase = true) ||
+                    it.group.title.contains(keyword, ignoreCase = true)
+            }
+        }
+    }
+
+    LazyColumn(
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        item {
+            Column {
+                Text(
+                    text = "设置",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Text(
+                    text = "按分组整理，想改哪项直接搜",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        item {
+            SearchBox(
+                query = query,
+                onQueryChange = { query = it },
+            )
+        }
+
+        if (keyword.isNotBlank()) {
+            item {
+                MeowCard {
+                    SectionHeader(
+                        title = if (hits.isEmpty()) "没有找到「$keyword」" else "搜索结果",
+                        subtitle = if (hits.isEmpty()) {
+                            "换个说法试试，例如「保持率」「间隔」「日历」"
+                        } else {
+                            "共 ${hits.size} 项，点一下跳到所在分组"
+                        },
+                    )
+                    hits.forEachIndexed { index, hit ->
+                        if (index > 0) MeowDivider()
+                        MeowSettingRow(
+                            title = hit.title,
+                            value = hit.group.title,
+                            onClick = { onOpenGroup(hit.group) },
+                            showChevron = true,
+                        )
+                    }
+                }
+            }
+        } else {
+            item {
+                MeowCard {
+                    SectionHeader(title = "学习", subtitle = "每天排多少、怎么排")
+                    GroupRow(SettingsGroup.RHYTHM, SettingsSummary.rhythm(state.settings), onOpenGroup)
+                    MeowDivider()
+                    GroupRow(SettingsGroup.FLEXIBILITY, SettingsSummary.flexibility(state.settings), onOpenGroup)
+                    MeowDivider()
+                    GroupRow(SettingsGroup.ALGORITHM, SettingsSummary.algorithm(state.settings), onOpenGroup)
+                    MeowDivider()
+                    GroupRow(SettingsGroup.APPEARANCE, SettingsSummary.appearance(state.settings), onOpenGroup)
+                }
+            }
+
+            item {
+                MeowCard {
+                    SectionHeader(title = "系统", subtitle = "和系统、版本打交道的部分")
+                    GroupRow(SettingsGroup.CALENDAR, SettingsSummary.calendar(state.settings), onOpenGroup)
+                    MeowDivider()
+                    GroupRow(SettingsGroup.UPDATE, SettingsSummary.update(state), onOpenGroup)
+                    MeowDivider()
+                    GroupRow(SettingsGroup.ADVANCED, SettingsSummary.advanced(state), onOpenGroup)
+                }
+            }
+
+            item {
+                // 用主题面（而非透明）保证终端/深色下这一栏不会浮出浅色底
+                MeowCard {
+                    MeowSettingRow(
+                        title = "数据存储",
+                        value = "仅本地",
+                        description = "所有背诵内容与复习记录都保存在这台设备上，不上传任何服务器",
+                    )
+                    Text(
+                        text = "Meowmorize ${state.update.currentVersion} · Android 10+",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
+            }
+        }
     }
 }
+
+@Composable
+private fun GroupRow(
+    group: SettingsGroup,
+    summary: String,
+    onOpenGroup: (SettingsGroup) -> Unit,
+) {
+    MeowSettingRow(
+        title = group.title,
+        description = summary,
+        onClick = { onOpenGroup(group) },
+        showChevron = true,
+    )
+}
+
+@Composable
+private fun SearchBox(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    MeowCard(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(10.dp))
+            Box(modifier = Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = "搜索设置项，如「保持率」「间隔」「日历」",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (query.isNotEmpty()) {
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .clickable { onQueryChange("") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "清空",
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 一条可搜索的设置项：命中后就跳它所在的分组。 */
+private data class SettingHit(val title: String, val group: SettingsGroup)
+
+/**
+ * 搜索索引。
+ *
+ * 刻意手写而不是从界面反射生成：这些名字就是用户嘴里的说法，
+ * 保持和界面文案一致比自动收集更重要。
+ */
+private val ALL_HITS: List<SettingHit> = listOf(
+    SettingHit("每日可投入时间", SettingsGroup.RHYTHM),
+    SettingHit("每日新任务上限", SettingsGroup.RHYTHM),
+    SettingHit("目标记忆保持率", SettingsGroup.RHYTHM),
+    SettingHit("重新生成今日计划", SettingsGroup.RHYTHM),
+
+    SettingHit("自动减负", SettingsGroup.FLEXIBILITY),
+    SettingHit("周末放宽", SettingsGroup.FLEXIBILITY),
+    SettingHit("按分钟计算完成率", SettingsGroup.FLEXIBILITY),
+    SettingHit("趋势窗口", SettingsGroup.FLEXIBILITY),
+    SettingHit("学科配额", SettingsGroup.FLEXIBILITY),
+    SettingHit("单科最小份额", SettingsGroup.FLEXIBILITY),
+    SettingHit("单科最大份额", SettingsGroup.FLEXIBILITY),
+
+    SettingHit("最长间隔", SettingsGroup.ALGORITHM),
+    SettingHit("同日重练上限", SettingsGroup.ALGORITHM),
+    SettingHit("难度回归强度", SettingsGroup.ALGORITHM),
+    SettingHit("间隔抖动", SettingsGroup.ALGORITHM),
+    SettingHit("反复遗忘提示阈值", SettingsGroup.ALGORITHM),
+    SettingHit("恢复算法默认值", SettingsGroup.ALGORITHM),
+
+    SettingHit("界面风格", SettingsGroup.APPEARANCE),
+    SettingHit("主题模式", SettingsGroup.APPEARANCE),
+
+    SettingHit("日历同步", SettingsGroup.CALENDAR),
+    SettingHit("同步窗口", SettingsGroup.CALENDAR),
+    SettingHit("立即同步", SettingsGroup.CALENDAR),
+
+    SettingHit("检查更新", SettingsGroup.UPDATE),
+    SettingHit("启动时检查更新", SettingsGroup.UPDATE),
+
+    SettingHit("时间快进", SettingsGroup.ADVANCED),
+    SettingHit("选择日期与时间", SettingsGroup.ADVANCED),
+    SettingHit("回到真实时间", SettingsGroup.ADVANCED),
+)
