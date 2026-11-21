@@ -2,10 +2,8 @@ package com.meowmorize.core.designsystem.component
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateColorAsState
@@ -47,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -95,15 +94,14 @@ fun MeowBottomBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             items.forEach { item ->
                 val selected = item.route == currentRoute
                 val interaction = remember { MutableInteractionSource() }
 
-                // 底栏一天要被点几十次：颜色过渡压到 150ms，只求「跟手」不求好看
+                // 底栏一天要被点几十次：只改颜色，不做任何尺寸动画
                 val container by animateColorAsState(
                     targetValue = if (selected) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
@@ -122,46 +120,47 @@ fun MeowBottomBar(
                     animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
                     label = "navTint",
                 )
-                Row(
+
+                // 等宽槽位：每个 tab 占 1/4。宽度恒定，切换时图标与文字都不会挪位，
+                // 也就不会出现「整条长度在变」的观感。
+                Box(
                     modifier = Modifier
-                        .meowPressScale(interactionSource = interaction, pressedScale = 0.95f)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(container)
+                        .weight(1f)
+                        .meowPressScale(interactionSource = interaction, pressedScale = 0.94f)
+                        .clip(RoundedCornerShape(if (terminal) 4.dp else 16.dp))
                         .clickable(
                             interactionSource = interaction,
                             indication = LocalIndication.current,
-                        ) { onSelect(item.route) }
-                        .padding(horizontal = 16.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        ) { onSelect(item.route) },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label,
-                        tint = tint,
-                        modifier = Modifier.size(21.dp),
+                    // 选中底片铺满槽位，只淡入淡出，不参与尺寸动画
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(horizontal = 2.dp, vertical = 1.dp)
+                            .clip(RoundedCornerShape(if (terminal) 4.dp else 14.dp))
+                            .background(container),
                     )
-                    // 文字展开而不是「突然出现」：胶囊宽度变化才有连续感
-                    AnimatedVisibility(
-                        visible = selected,
-                        enter = fadeIn(meowTween(MeowMotion.FAST)) +
-                            expandHorizontally(
-                                animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
-                                expandFrom = Alignment.Start,
-                            ),
-                        exit = fadeOut(meowTween(MeowMotion.PRESS)) +
-                            shrinkHorizontally(
-                                animationSpec = meowTween(MeowMotion.PRESS, MeowMotion.easeOut),
-                                shrinkTowards = Alignment.Start,
-                            ),
+                    Column(
+                        modifier = Modifier.padding(vertical = 7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Spacer(Modifier.width(7.dp))
-                            Text(
-                                text = item.label,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = tint,
-                            )
-                        }
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label,
+                            tint = tint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        // 文字常驻：显隐会让宽度变化，正是抖动的来源
+                        Text(
+                            text = item.label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tint,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
