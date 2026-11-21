@@ -62,12 +62,13 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 
 | 场景 | 能力 |
 | --- | --- |
-| 今日 | 打开即生成当日计划；完成度环形进度；负荷档位（轻松/标准/冲刺）；算法解释卡；一键调整今日任务量 |
-| 背诵 | 先回忆、再揭晓；「显示提示」会展示用户自写的线索并禁用「轻松」；四档自评点一下先展开答案，该档变成「下一步」，可改选，再确认才落库，**出结果后按钮整体锁定**；支持**填空题**（题干可见、答案才需揭示）；有截止日期时显示倒计时与生效保持率，反复遗忘时给出改写建议 |
+| 今日 | 打开即生成当日计划；完成度环形进度；算法判定的负荷档位标签 + 容量上限；「为什么今天是这样」解释卡；「今天能做多久？」单滑杆调整（放不下的顺延，不超发） |
+| 背诵 | **评分即揭晓**：屏上没有任何「显示答案 / 显示内容」按钮，先凭记忆判断、点四档熟练度后才自动展示答案（有答案）或内容（无答案）；该档变成「下一步」，可改选，再确认才落库，**出结果后按钮整体锁定**；「显示提示」在下半屏、整宽按钮，用过提示即禁用「轻松」；有截止日期时显示倒计时与生效保持率，反复遗忘时给出改写建议 |
 | 日历 | 月视图：学科色点表示已排任务、空心点表示「按曲线推算会到期」；点选某天查看任务与完成情况，可直接进入背诵 |
 | 任务库 | 搜索（主题/内容/来源）、按学科筛选、显示归档；**6 种排序**：最近更新 / 最近创建 / 下次复习 / 主题名称（拼音）/ 预计用时 / 优先级；**删除任务**；**管理学科（可删除学科，任务转为未分类）** |
-| 新增/编辑 | 学科、主题、内容、来源、优先级、**背诵提示**、**截止日期**；背诵用时自动估算且可 **+/- 或直接输入**；内容支持 **Markdown 高级模式**（标题/列表/引用/两栏对照 + 快捷插入 + 预览）；**OCR 取字（测试）** 提供拍照 / 相册 / 粘贴三条路径；编辑时可选择「保持排程」或「重新学习」 |
-| 设置 | 每日容量、新任务上限、目标保持率、自动减负、周末放宽、主题；**界面风格（柔角卡片 / 终端）**；**复习算法参数**（最长间隔 / 同日上限 / 难度回归 / 间隔抖动 / leech 阈值，可一键恢复默认）；**弹性实验**（今天状态 / 分钟完成率 / 学科配额，默认关）；**系统日历同步**；**时间快进（测试）**；重排今日计划 |
+| 新增/编辑 | **固定「背诵内容 + 答案」两栏**（不再区分是否为填空题，答案可留空）；学科、主题、来源、优先级、**背诵提示**、**截止日期**，所有文本框均支持换行；背诵用时自动估算且可 **+/- 或直接输入**；内容支持 **Markdown 高级模式**（标题/列表/引用/两栏对照 + 快捷插入 + 预览）；**OCR 取字（测试）** 提供拍照 / 相册 / 粘贴三条路径；编辑时可选择「保持排程」或「重新学习」 |
+| 设置 | **主页分组 + 搜索**：今日节奏 / 弹性规则 / 复习算法 / 外观 / 日历同步 / 检查更新 / 测试工具，逐项可搜（搜「保持率」「间隔」直接跳页）。外观含**三套风格**（柔角卡片 / 终端 / **磨砂玻璃**）、主题模式、**强调色**（预设五组主流配色 + 色相自调）；选磨砂玻璃时下方展开**每日壁纸**（Bing 每日一图、铺满/适应/拉伸/居中、模糊与遮罩、亮/暗磨砂、下载壁纸）；复习算法参数可一键恢复默认；弹性实验默认关；系统日历同步；时间快进（测试）；重排今日计划 |
+| 更新 | 设置 → 检查更新：手动查 GitHub Releases，**只提示不下载不安装**；「启动时检查更新」开关（6 小时节流）；版本号读取真实安装版本 |
 
 首次启动会写入 3 个学科与 3 条明确标注「示例」的任务，方便直接体验完整流程。
 
@@ -84,7 +85,7 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 │  :feature:*    today  calendar  library  editor  settings     │
 │                Compose UI + HiltViewModel + UiState            │
 ├──────────────────────────────────────────────────────────────┤
-│  :core:designsystem   HyperOS 主题、卡片、输入、底部导航        │
+│  :core:designsystem   三套风格主题、动效令牌、卡片/输入/导航    │
 ├──────────────────────────────────────────────────────────────┤
 │  :core:domain   用例 / FSRS 排程 / 计划生成 / 仓库接口（纯 Kotlin）│
 │  :core:model    领域模型（纯 Kotlin，零依赖）                   │
@@ -97,23 +98,23 @@ Meowmorize 想解决的不是「怎么让人背得更多」，而是「怎么让
 
 依赖方向严格单向：`feature → domain → model`，`data → domain/database`，`app` 只做装配。
 domain 层不引用任何 Android / Hilt / Room 类型，因此排程、弹性规则、排序与同步窗口计算
-都可以纯 JVM 单测（当前 23 个用例，见 `core/domain/src/test`）。
+都可以纯 JVM 单测（当前 76 个用例，见 `core/domain/src/test`）。
 
 ### 3.2 模块职责
 
 | 模块 | 职责 | 关键文件 |
 | --- | --- | --- |
-| `:app` | Application 装配、启动引导、主题注入、导航图、底部导航 | `MeowmorizeApp.kt`, `MainActivity.kt` |
+| `:app` | Application 装配、启动引导、主题注入（强调色/磨砂明暗）、壁纸层、导航图、更新提示 | `MeowmorizeApp.kt`, `MainActivity.kt`, `WallpaperBackdrop.kt` |
 | `:core:model` | `MemorizeItem`、`ReviewState`、`DailyPlan`、`MonthCalendar`、`TaskSortOrder` | `Calendar.kt`, `DailyPlan.kt` |
 | `:core:domain` | 用例（生成计划/评分/保存/日历同步）、FSRS、弹性计划、排序、仓库接口 | `FsrsScheduler.kt`, `TodayPlanGenerator.kt`, `SyncUpcomingToCalendarUseCase.kt` |
 | `:core:data` | 仓库实现、实体映射、DataStore、系统日历适配、可调时钟、Hilt 模块 | `PlanRepositoryImpl.kt`, `AndroidCalendarRepository.kt` |
 | `:core:database` | Room 实体与 DAO、v1→v2 迁移、schema 导出 | `MeowmorizeDatabase.kt`, `MeowMigrations.kt` |
-| `:core:designsystem` | HyperOS 色板/字体/形状，卡片、标签、环进度、输入、底部弹层 | `Theme.kt`, `Labels.kt` |
+| `:core:designsystem` | 三套主题（柔角卡片 / 终端 / 磨砂玻璃）、强调色、动效令牌、卡片/标签/环进度/输入/底部弹层 | `Theme.kt`, `AccentPalette.kt`, `motion/MeowMotion.kt` |
 | `:feature:today` | 今日计划、调整任务量弹层、背诵页 | `TodayScreen.kt`, `ReviewScreen.kt` |
 | `:feature:calendar` | 月历网格、按日任务列表、预计到期预测 | `CalendarScreen.kt`, `CalendarViewModel.kt` |
 | `:feature:library` | 任务库检索、筛选、排序、归档 | `LibraryScreen.kt` |
 | `:feature:editor` | 新增/编辑、用时覆盖、排程更新策略 | `EditorScreen.kt` |
-| `:feature:settings` | 参数调节、主题、日历同步、时间快进 | `SettingsScreen.kt` |
+| `:feature:settings` | 设置主页（分组 + 搜索）、各二级页面、壁纸与磨砂、检查更新 | `SettingsScreen.kt`, `SettingsPages.kt` |
 
 每个 feature 只依赖 `model + domain + common + designsystem`，不直接依赖 `data`，
 仓库实现通过 Hilt 在 `:app` 的依赖图里注入——「换数据库/加网络同步/换日历实现」都不影响 UI。
@@ -150,12 +151,12 @@ subjects 1 ──── * items 1 ──── 1 review_states
 因此：编辑任务不会破坏进度，重新生成计划不会弄丢「已完成」，
 后续做统计/参数拟合也只是读日志。
 
-### 4.2 表结构（v4）
+### 4.2 表结构（v5）
 
 | 表 | 主要字段 | 说明 |
 | --- | --- | --- |
 | `subjects` | `id, name(unique), colorArgb, sortOrder, weight, examAt` | 学科，名字唯一；`weight` 供配额分配，`examAt` 作为任务截止日期的兜底 |
-| `items` | `id, subjectId(FK, SET_NULL), topic, content, hint, contentFormat, source, priority, status, estimatedMinutes, durationIsCustom, deadlineAt, clozeAnswer, createdAt, updatedAt, revision` | `revision` 每次内容变更自增；`durationIsCustom` 区分手填/估算；`deadlineAt` 为考试/汇报截止；`clozeAnswer` 非空表示这条按「题干 + 答案」的填空题处理 |
+| `items` | `id, subjectId(FK, SET_NULL), topic, content, hint, contentFormat, source, priority, status, estimatedMinutes, durationIsCustom, deadlineAt, clozeAnswer, createdAt, updatedAt, revision` | `revision` 每次内容变更自增；`durationIsCustom` 区分手填/估算；`deadlineAt` 为考试/汇报截止；`clozeAnswer` 是**答案**（字段名沿用历史），为空表示只有内容、没有需要单独揭晓的答案 |
 | `review_states` | `itemId(PK, FK CASCADE), dueAt, stability, difficulty, reps, lapses, phase, lastReviewedAt, scheduledDays, leech, leechSince, learningStep, sameDayReps` | 与任务一对一；`leech` 为「反复遗忘」标记，只提示不改算法 |
 | `review_logs` | `id, itemId(FK), reviewedAt, grade, intervalBefore, intervalAfter, stabilityAfter, phaseAfter, itemRevision, elapsedDays, scheduledDueAt, stabilityBefore, difficultyBefore, difficultyAfter, retrievability, hintUsed, wasOverdue, actualMs` | 只追加；后九个字段用于回溯与将来做参数校准 |
 | `daily_plans` | `date(PK), generatedAt, capacityMinutes, plannedMinutes, loadLevel, targetRetention, elasticityFactor, backlogCount, newCount, notes, userAdjusted, baselinePlannedMinutes, baselineTaskCount, todayState` | `baseline*` 是当天首次生成的快照，重排不覆盖，保证完成率分母不被改写 |
@@ -253,17 +254,16 @@ if (到期分钟 > 2 × 基准容量) factor = min(factor, 0.90)   // 积压时�
   只做提示（复习页黄字、建议改写或拆分），不自动删除、不改 `S`——
   这类内容的问题通常在「写得太长/没有线索」，而不是复习次数不够。
 
-### 5.2.3 填空题（题干 + 答案）
+### 5.2.3 背诵内容与答案
 
-历史、政治这类内容常常是「一句话挖空」：`第二次世界大战的特点为 ______`。
-这类内容不该被当成「整段文字背下来」，因此新增 `clozeAnswer`：
+每条任务固定两部分：`content`（背诵内容，复习时先展示）与 `clozeAnswer`（答案，默认隐藏）。
 
-- 非空即进入填空题模式，`content` 视作题干（可用 `______` 标出空位）；
-- 复习时**题干始终可见**，答案要点「显示答案」才出现——这才是考试时的情境；
-- 编辑器里有「转填空」开关，开启时若题干没有下划线会自动补一个，并出现答案输入框。
-
-数据是「普通内容 + 可选答案」而不是两张表：一条内容随时可以转成/退出填空题，
-排程与复习记录完全连续，不需要重建。
+- **不再区分「是不是填空题」**：编辑器只有「背诵内容 + 答案」两栏，没有开关。
+  历史、政治这类「一句话挖空」的内容，把空位直接写进内容里、答案单独填即可；
+- **有答案** → 复习时内容常显，**点了熟练度之后**才展示答案（先判断、再对照）；
+- **无答案**（留空）→ 复习时连内容一起遮住，评分后才展示，适合整段文字背诵；
+- 存储上是一个可空列而不是两张表：一条内容随时可以从「只有内容」变成「内容 + 答案」，
+  排程与复习记录完全连续，不需要重建。
 
 ### 5.3 背诵用时：估算 + 用户覆盖
 
@@ -315,14 +315,20 @@ if (到期分钟 > 2 × 基准容量) factor = min(factor, 0.90)   // 积压时�
 **两段式评分**（`ReviewViewModel` 的状态机）：
 
 ```
-未选择 → 点「记得」→ 展开答案 + 该按钮变成「下一步」
+未选择 → 点「记得」→ 自动展开答案/内容 + 该按钮变成「下一步」
         → 可改选（原按钮恢复，新按钮变「下一步」）
         → 点「下一步」才写入 review_logs 并推进 FSRS
 ```
 
-目的是让用户「先看答案、再确认」，避免误触把间隔算错。
+要点：**屏上没有独立的「显示答案 / 显示内容」按钮**，揭示只由「点熟练度」触发
+（`selectGrade` 内部把 `revealed` 置 true）。这样用户必须先凭记忆做出判断，
+再看对照——而不是先看答案再自评，后者会让曲线系统性偏乐观。
 
-**背诵提示**：每条任务可写一句线索，复习页有独立的「显示提示」入口。
+底部操作条（熟练度 + 提示按钮）放在屏幕下半区：拇指够得到的位置，
+而不是顶部。
+
+**背诵提示**：每条任务可写一句线索，复习页底部有整宽的「显示提示」按钮
+（就在熟练度上方，拇指最容易够到）。
 用过提示即标记 `hintUsed`，本次直接隐藏「轻松」——提示是降难度的操作，必须付出代价，
 否则评分会系统性偏高、曲线失真。
 
@@ -356,11 +362,11 @@ v1.0.0–1.0.2 在 Android 13 及以下的机型上「点开即闪退」，Andro
 ART 上不存在」这一类问题。这类坑要么靠低版本真机覆盖，要么给模块开启 core library
 desugaring，从机制上把 `java.time` / `java.util` 的新增量统一降级。
 
-## 六、界面：两套风格
+## 六、界面：三套风格
 
 ### 6.1 柔角卡片（默认）
 
-- **色板**：中性浅灰/近黑打底，单一活力橙作为强调色，薄荷绿表示完成；
+- **色板**：中性浅灰/近黑打底，默认活力橙强调、薄荷绿表示完成；强调色可换成五组预设或自选色相（见 §6.3）；
 - **形状**：24–30dp 大圆角卡片，用「极浅描边 + 层次色」代替重阴影，暗色同样成立；
 - **排版**：大标题字距收紧、正文 16sp、层级少；
 - **组件**：悬浮胶囊底部导航（今日/日历/任务库/设置）、环形进度、胶囊标签、
@@ -395,9 +401,31 @@ desugaring，从机制上把 `java.time` / `java.util` 的新增量统一降级�
 主按钮在终端风格下自动退化为纯色块；不使用超过两个色相装饰同一画面；
 所有线条必须对应一条信息边界。
 
+### 6.3 磨砂玻璃
+
+设置 → 外观 → 界面风格选「磨砂玻璃」。它把底色交给照片，靠**材质**而不是色板建立层次。
+
+| 维度 | 说明 |
+| --- | --- |
+| 壁纸 | 微软 Bing 每日一图；按屏幕尺寸自动选图（宽屏 UHD / 常规 1080p），当天缓存、次日自动换 |
+| 铺法 | 铺满 / 适应 / 拉伸 / 居中（对齐 Windows） |
+| 可读性 | 模糊 0–48dp（**默认 24dp**）、遮罩 0–70%。默认比 iOS 的浅磨砂重得多——背诵时背景不该抢注意力 |
+| 明暗 | 跟随系统 / 亮磨砂 / 暗磨砂 |
+| 材质 | `background` 透明、`surface` 半透明白：卡片、按钮、底栏本来就用 surface，叠在壁纸上天然是玻璃，不需要逐组件写磨砂分支 |
+| 强调色 | 五组预设（暖橙 / 电光蓝 / 正红 / 青绿 / 亮蓝）+ 色相自调，对所有风格生效 |
+| 下载 | 「下载今日壁纸」写到系统 `下载/Meowmorize`，可拿去当手机壁纸 |
+
+两条实现约束（改动时别踩）：
+
+- **遮罩颜色随明暗切换**：亮磨砂压白、暗磨砂压黑。统一压黑会让深色文字糊在暗遮罩上；
+- 壁纸解码放在 IO 线程并降采样（≤2200px）；`Modifier.blur` 需要 **API 31+**，
+  更低版本只靠遮罩保证可读性。
+
 ## 七、构建与运行
 
-环境：**JDK 21**（AGP 9 的要求）、Android SDK 37、Gradle 9.6、AGP 9.4。
+环境：**JDK 21**（AGP 9 的要求）、Android SDK 37、Gradle 9.9.1、AGP 9.5.1。
+`app` 模块已开启 **core library desugaring**：`java.time` / `java.util` 里 Java 9+ 追加、
+Android 低版本没有的 API 会统一降级到 minSdk 29，避免「编译期合法、运行期 NoSuchMethodError」。
 签名材料不入库，release 构建会从 `~/.meowmorize/keystore.properties` 读取，缺失时产出 unsigned 包。
 
 ```bash
@@ -406,8 +434,8 @@ export ANDROID_HOME=/path/to/Android/Sdk
 ./gradlew :app:assembleDebug          # 产物：app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 
-./gradlew :core:domain:test           # 63 个领域层用例
-./gradlew :app:lintDebug
+./gradlew :core:domain:test           # 76 个领域层用例
+./gradlew :app:lintRelease            # 发版前的静态检查（当前 0 error）
 ```
 
 权限说明：
@@ -435,7 +463,7 @@ Meowmorize/
 │   └── designsystem/             # 主题与通用组件
 ├── feature/
 │   ├── today/  calendar/  library/  editor/  settings/
-├── docs/                         # 项目介绍（Markdown / 微信纯文本）、图标
+├── docs/                         # 项目介绍、动效规范、发版清单、图标
 ├── tools/generate_icons.py       # 从源图生成全套启动图标（纯标准库）
 ├── .github/                      # CI、issue/PR 模板、dependabot
 ├── gradle/libs.versions.toml     # 版本目录
@@ -455,7 +483,7 @@ legacy / 圆形 / 自适应前景，并重写 `mipmap-anydpi-v26` 的 XML。
 | 复习提醒 | 用 `review_states.dueAt` 做 WorkManager 每日调度；`calendar_sync` 已可作为事件锚点 |
 | 个性化时间估算 | 用日志拟合「主题类型 → 实际耗时」系数，替换 `DurationEstimator` 的常数 |
 | 语音背诵 | 新增 `feature:recite`，用系统 SpeechRecognizer 对比 `content`，不改表结构 |
-| 更多复习模式 | `items.clozeAnswer` 已经区分了「整段」与「挖空」，可继续扩展选择题/听写 |
+| 更多复习模式 | 内容与答案已经分离（`content` + `clozeAnswer`），可在此基础上扩展选择题 / 听写 |
 | 多端同步 | 替换 `:core:data` 的仓库实现（接口隔离在 domain） |
 | 更快的时间实验 | 在现有 `TimeTravelRepository` 上增加「按天自动推进」的测试脚本 |
 
@@ -465,9 +493,29 @@ legacy / 圆形 / 自适应前景，并重写 `mipmap-anydpi-v26` 的 XML。
 
 代码以 [MIT License](LICENSE) 发布，可自由使用、修改、分发，保留版权声明即可。
 
-**应用图标是例外**：它使用了第三方角色形象（来自《明日方舟》的同人表情），
-版权归原权利方所有，**不在 MIT 许可范围内**，仅作为个人项目的非商业标识使用。
+**应用图标是例外**：它取自《卡拉彼丘》（Strinova）**官方表情包**，角色形象与著作权
+归原权利方所有，**不在 MIT 许可范围内**，这里仅作为个人项目的非商业标识使用，
+并非本项目原创，也不代表与官方有任何关联。
 如果你要基于本项目做二次分发或商业使用，请替换 `app/src/main/res/mipmap-*` 下的图标资源。
 
 替换方式见 [CONTRIBUTING.md](CONTRIBUTING.md)：准备一张透明背景的方形图，
 跑一次 `python tools/generate_icons.py <图>` 即可，不要手工改单张 PNG。
+
+---
+
+## 十一、更新与发布
+
+应用内自带更新检查（设置 → 检查更新）：向 GitHub Releases 查最新正式版，**只提示、
+不下载、不安装**；「启动时检查更新」默认开启，6 小时内不重复查询。
+
+因此发版流程是固定的——**README 与代码同版本**，不留「下次再补」：
+
+1. 升 `versionCode` / `versionName`（`app/build.gradle.kts`）
+2. 更新 `CHANGELOG.md`（新增 / 变更 / 修复）
+3. **补齐 README**：功能表、架构图里的模块与用例数、构建章节的工具链版本、素材声明
+   —— 这几处最容易随版本过期
+4. `./gradlew :core:domain:test :app:lintRelease :app:assembleRelease`
+5. 导出 APK、记录 sha256，创建 Release（tag `vX.Y.Z`）并上传 `Meowmorize.apk`
+6. 确认 `main` 上 CI 跑绿
+
+清单同步放在 [docs/RELEASE.md](docs/RELEASE.md)，发版前照抄。
