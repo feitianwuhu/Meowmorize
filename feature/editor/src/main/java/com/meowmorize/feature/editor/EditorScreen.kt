@@ -162,6 +162,10 @@ fun EditorRoute(
                     onValueChange = viewModel::setNewSubjectName,
                     label = "学科名称",
                     placeholder = "例如：英语、政治、专业课",
+                    singleLine = false,
+                    minLines = 1,
+                    maxLines = 2,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Default,
                 )
             },
             confirmButton = {
@@ -312,11 +316,16 @@ fun EditorScreen(
             }
 
             Spacer(Modifier.height(16.dp))
+            // 允许换行：从别处粘贴的标题常常自带换行，单行框会把它挤成一团
             MeowTextField(
                 value = state.topic,
                 onValueChange = onTopicChange,
                 label = "背诵主题",
                 placeholder = "例如：Unit 3 核心词汇",
+                singleLine = false,
+                minLines = 1,
+                maxLines = 3,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Default,
                 isError = state.error != null && state.topic.isBlank(),
                 supportingText = if (state.topic.isBlank()) "必填，用一句话说清这条要背什么" else null,
             )
@@ -548,7 +557,10 @@ fun EditorScreen(
                 onValueChange = onSourceChange,
                 label = "来源（可选）",
                 placeholder = "例如：考研词汇绿宝书 P32",
-                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                singleLine = false,
+                minLines = 1,
+                maxLines = 3,
+                imeAction = androidx.compose.ui.text.input.ImeAction.Default,
             )
 
             Spacer(Modifier.height(18.dp))

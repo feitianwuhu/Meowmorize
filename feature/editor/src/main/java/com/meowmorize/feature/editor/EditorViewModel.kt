@@ -245,7 +245,8 @@ class EditorViewModel @Inject constructor(
     }
 
     fun confirmNewSubject() {
-        val name = _uiState.value.newSubjectName.trim()
+        // 学科名会显示在胶囊标签里：换行折成空格，避免标签被撑成两行
+        val name = _uiState.value.newSubjectName.replace("\n", " ").trim()
         if (name.isEmpty()) return
         viewModelScope.launch {
             runCatching { studyRepository.ensureSubject(name) }
