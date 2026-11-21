@@ -6,6 +6,13 @@ import com.meowmorize.core.common.time.TimeProvider
 import com.meowmorize.core.domain.repository.CalendarSyncRepository
 import com.meowmorize.core.domain.repository.CalendarSyncResult
 import com.meowmorize.core.domain.app.AppVersionProvider
+import com.meowmorize.core.domain.repository.DailyWallpaper
+import com.meowmorize.core.domain.repository.WallpaperRepository
+import com.meowmorize.core.model.AccentChoice
+import com.meowmorize.core.model.GlassTone
+import com.meowmorize.core.model.WallpaperScale
+import androidx.compose.ui.graphics.toArgb
+import com.meowmorize.core.designsystem.theme.MeowAccents
 import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.domain.repository.TimeTravelRepository
 import com.meowmorize.core.domain.usecase.CheckUpdateUseCase
@@ -39,6 +46,7 @@ data class SettingsUiState(
     val isSyncing: Boolean = false,
     val message: String? = null,
     val update: UpdateUiState = UpdateUiState(),
+    val wallpaper: WallpaperUiState = WallpaperUiState(),
 ) {
     val clockShifted: Boolean get() = clockOffsetMillis != 0L
 }
@@ -49,6 +57,13 @@ data class SettingsUiState(
  * 结果一直留着（而不是查完就弹一次提示）：用户可能切走再回来，
  * 版本信息不该凭空消失。
  */
+/** 壁纸页状态：元数据用于展示版权，文件用于预览与导出。 */
+data class WallpaperUiState(
+    val meta: DailyWallpaper? = null,
+    val file: java.io.File? = null,
+    val busy: Boolean = false,
+)
+
 data class UpdateUiState(
     val currentVersion: String = "",
     val checking: Boolean = false,
@@ -65,6 +80,7 @@ class SettingsViewModel @Inject constructor(
     private val timeProvider: TimeProvider,
     private val checkUpdate: CheckUpdateUseCase,
     private val appVersionProvider: AppVersionProvider,
+    private val wallpaperRepository: WallpaperRepository,
 ) : ViewModel() {
 
     private data class LocalState(
@@ -76,6 +92,8 @@ class SettingsViewModel @Inject constructor(
     private val local = MutableStateFlow(LocalState(hasPermission = calendarSyncRepository.hasPermission()))
 
     private val updateState = MutableStateFlow(UpdateUiState(currentVersion = appVersionProvider.versionName()))
+
+    private val wallpaperState = MutableStateFlow(WallpaperUiState())
 
     /** 每秒刷新一次虚拟时间，让「当前应用时间」是活的。 */
     private val clockTicker = flow {
@@ -90,7 +108,8 @@ class SettingsViewModel @Inject constructor(
         clockTicker,
         local,
         updateState,
-    ) { settings, now, mutation, update ->
+        wallpaperState,
+    ) { settings, now, mutation, update, wallpaper ->
         SettingsUiState(
             settings = settings,
             virtualNow = now,
@@ -99,6 +118,7 @@ class SettingsViewModel @Inject constructor(
             isSyncing = mutation.isSyncing,
             message = mutation.message,
             update = update,
+            wallpaper = wallpaper,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -297,6 +317,66 @@ class SettingsViewModel @Inject constructor(
         result.permissionDenied -> "没有日历权限，请先授权"
         result.failed -> "系统日历不可用，同步失败"
         else -> "$fallback：${result.synced} 条已同步，${result.removed} 条已移除"
+    }
+
+    // ---------- 外观：壁纸与磨砂 ----------
+
+    /** 打开壁纸页时拉一次元数据；已有缓存就不联网。 */
+    fun loadWallpaper() {
+        viewModelScope.launch {
+            val cached = runCatching { wallpaperRepository.cached() }.getOrNull()
+            if (cached != null) {
+                wallpaperState.value = wallpaperState.value.copy(meta = cached.first, file = cached.second)
+                return@launch
+            }
+            wallpaperState.value = wallpaperState.value.copy(busy = true)
+            val meta = runCatching { wallpaperRepository.today() }.getOrNull()
+            val downloaded = runCatching { wallpaperRepository.ensureDownloaded() }.getOrNull()
+            wallpaperState.value = WallpaperUiState(
+                meta = meta,
+                file = downloaded?.second,
+                busy = false,
+            )
+        }
+    }
+
+    /** 把今日壁纸存到系统「下载」目录，方便用户自己拿去当壁纸。 */
+    fun downloadWallpaper() {
+        viewModelScope.launch {
+            val state = wallpaperState.value
+            val file = state.file
+            val meta = state.meta
+            if (file == null || meta == null) {
+                local.value = local.value.copy(message = "还没有可下载的壁纸")
+                return@launch
+            }
+            wallpaperState.value = state.copy(busy = true)
+            val name = runCatching { wallpaperRepository.exportToDownloads(meta, file) }.getOrNull()
+            wallpaperState.value = wallpaperState.value.copy(busy = false)
+            local.value = local.value.copy(
+                message = if (name != null) "已保存到 下载/Meowmorize" else "保存失败",
+            )
+        }
+    }
+
+    fun setWallpaperEnabled(enabled: Boolean) = persistOnly { it.copy(wallpaperEnabled = enabled) }
+
+    fun setWallpaperScale(scale: WallpaperScale) = persistOnly { it.copy(wallpaperScale = scale) }
+
+    fun setWallpaperBlur(dp: Int) = persistOnly { it.copy(wallpaperBlur = dp) }
+
+    fun setWallpaperScrim(value: Double) = persistOnly { it.copy(wallpaperScrim = value) }
+
+    fun setGlassTone(tone: GlassTone) = persistOnly { it.copy(glassTone = tone) }
+
+    fun setAccent(choice: AccentChoice) = persistOnly { it.copy(accentChoice = choice) }
+
+    fun setAccentHue(hue: Float) = persistOnly {
+        // 固定较高饱和度与亮度，避免用户滑到灰色看不出强调
+        it.copy(
+            accentChoice = AccentChoice.CUSTOM,
+            accentCustomArgb = MeowAccents.fromHue(hue).toArgb().toLong(),
+        )
     }
 
     // ---------- 检查更新 ----------

@@ -10,12 +10,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.meowmorize.core.designsystem.theme.MeowAccents
+import com.meowmorize.core.model.GlassTone
 import com.meowmorize.core.designsystem.theme.MeowTheme
 import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.model.ThemeMode
@@ -41,7 +45,7 @@ class MainActivity : ComponentActivity() {
                 StartupTrace.mark(this@MainActivity, "first-composition")
             }
             val themeMode by appViewModel.themeMode.collectAsStateWithLifecycle()
-            val appStyle by appViewModel.appStyle.collectAsStateWithLifecycle()
+            val appearance by appViewModel.appearance.collectAsStateWithLifecycle()
             val updatePrompt by appViewModel.updatePrompt.collectAsStateWithLifecycle()
 
             // 启动时按设置的开关检查一次更新（内部有 6 小时节流，关掉开关则完全不查）
@@ -52,6 +56,12 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
             }
 
+            val glassDark = when (appearance.glassTone) {
+                GlassTone.SYSTEM -> isSystemInDarkTheme()
+                GlassTone.LIGHT -> false
+                GlassTone.DARK -> true
+            }
+
             // 状态栏/导航栏图标颜色跟随主题，避免深色模式下的「白底白字」。
             val view = LocalView.current
             if (!view.isInEditMode) {
@@ -60,7 +70,11 @@ class MainActivity : ComponentActivity() {
                     // 强转会在首帧抛 ClassCastException，表现为「点开就闪退」。
                     val window = view.context.findActivity()?.window ?: return@SideEffect
                     val controller = WindowCompat.getInsetsController(window, view)
-                    val lightBars = !darkTheme && appStyle != AppStyle.TERMINAL
+                    val lightBars = if (appearance.style == AppStyle.GLASS) {
+                        !glassDark
+                    } else {
+                        !darkTheme && appearance.style != AppStyle.TERMINAL
+                    }
                     controller.isAppearanceLightStatusBars = lightBars
                     controller.isAppearanceLightNavigationBars = lightBars
                 }
@@ -81,8 +95,40 @@ class MainActivity : ComponentActivity() {
             androidx.compose.runtime.CompositionLocalProvider(
                 com.meowmorize.core.designsystem.motion.LocalMotionScale provides motionScale,
             ) {
-                MeowTheme(style = appStyle, darkTheme = darkTheme) {
-                    MeowmorizeApp()
+                val accent = MeowAccents.resolve(appearance.accentChoice, appearance.accentCustomArgb)
+
+                MeowTheme(
+                    style = appearance.style,
+                    darkTheme = darkTheme,
+                    accent = accent,
+                    glassDark = glassDark,
+                ) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    ) {
+                        // 壁纸只在磨砂风格下出现；其它风格的 background 是不透明色。
+                        // 先铺一层中性底色：壁纸还在下载时也不会闪白。
+                        if (appearance.style == AppStyle.GLASS && appearance.wallpaperEnabled) {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = androidx.compose.ui.Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        if (glassDark) {
+                                            androidx.compose.ui.graphics.Color(0xFF101216)
+                                        } else {
+                                            androidx.compose.ui.graphics.Color(0xFFB9C0C9)
+                                        },
+                                    ),
+                            )
+                            WallpaperBackdrop(
+                                file = appearance.wallpaperFile,
+                                scale = appearance.wallpaperScale,
+                                blurDp = appearance.wallpaperBlur,
+                                scrim = appearance.wallpaperScrim.toFloat(),
+                            )
+                        }
+                        MeowmorizeApp()
+                    }
 
                     updatePrompt?.let { info ->
                         UpdateAvailableDialog(

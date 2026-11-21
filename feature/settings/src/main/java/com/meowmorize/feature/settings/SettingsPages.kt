@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,6 +36,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.layout.ContentScale
+import com.meowmorize.core.designsystem.theme.MeowAccents
+import com.meowmorize.core.model.AccentChoice
+import com.meowmorize.core.model.GlassTone
+import com.meowmorize.core.model.WallpaperScale
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowDivider
 import com.meowmorize.core.designsystem.component.MeowIconButton
@@ -69,7 +84,8 @@ internal enum class SettingsGroup(
     RHYTHM("今日节奏", "决定算法每天敢给你排多少任务"),
     FLEXIBILITY("弹性规则", "让计划跟着生活走，而不是反过来"),
     ALGORITHM("复习算法", "改完下一次评分就生效，不会重算历史"),
-    APPEARANCE("外观", "两套信息组织方式，不是简单换色"),
+    APPEARANCE("外观", "三套信息组织方式，不是简单换色"),
+    WALLPAPER("壁纸与磨砂", "每日一图、玻璃质感与强调色"),
     CALENDAR("日历同步", "把接下来要做的事放进手机日历"),
     UPDATE("检查更新", "只在你点的时候更新，不会自动下载安装"),
     ADVANCED("测试工具", "验证遗忘曲线，不用真的等一周"),
@@ -90,6 +106,7 @@ internal fun SettingsGroupPage(
         SettingsGroup.FLEXIBILITY -> FlexibilityPage(state, viewModel, onBack)
         SettingsGroup.ALGORITHM -> AlgorithmPage(state, viewModel, onBack)
         SettingsGroup.APPEARANCE -> AppearancePage(state, viewModel, onBack)
+        SettingsGroup.WALLPAPER -> WallpaperPage(state, viewModel, onBack)
         SettingsGroup.CALENDAR -> CalendarPage(state, viewModel, onToggleCalendarSync, onBack)
         SettingsGroup.UPDATE -> UpdatePage(state, viewModel, onOpenUrl, onBack)
         SettingsGroup.ADVANCED -> AdvancedPage(state, viewModel, onBack)
@@ -413,15 +430,18 @@ private fun AppearancePage(state: SettingsUiState, vm: SettingsViewModel, onBack
             MeowCard {
                 SectionHeader(title = "界面风格", subtitle = "两套信息组织方式，不是简单换色")
                 MeowSegmented(
-                    options = listOf("柔角卡片", "终端"),
+                    options = listOf("柔角卡片", "终端", "磨砂玻璃"),
                     selectedIndex = AppStyle.entries.indexOf(settings.appStyle),
                     onSelect = { index -> vm.setAppStyle(AppStyle.entries[index]) },
                 )
                 Text(
-                    text = if (settings.appStyle == AppStyle.TERMINAL) {
-                        "终端：深蓝黑底、等宽数字、规格条与曲线。固定深色，不提供主题切换。"
-                    } else {
-                        "柔角卡片：大圆角、柔和层次、暖橙强调、环形进度。"
+                    text = when (settings.appStyle) {
+                        AppStyle.TERMINAL ->
+                            "终端：深蓝黑底、等宽数字、规格条与曲线。固定深色，不提供主题切换。"
+                        AppStyle.GLASS ->
+                            "磨砂玻璃：每日壁纸做底，卡片与按钮是半透明玻璃。模糊度可调，默认比 iOS 更重。"
+                        AppStyle.SOFT_CARD ->
+                            "柔角卡片：大圆角、柔和层次、暖橙强调、环形进度。"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -726,6 +746,12 @@ internal object SettingsSummary {
         "$theme · 柔角卡片"
     }
 
+    fun wallpaper(settings: UserSettings): String = if (!settings.wallpaperEnabled) {
+        "未使用壁纸"
+    } else {
+        "每日一图 · ${settings.wallpaperScale.label} · 模糊 ${settings.wallpaperBlur}dp"
+    }
+
     fun calendar(settings: UserSettings): String = if (settings.calendarSyncEnabled) {
         "已开启 · 未来 ${settings.calendarSyncWindowHours} 小时"
     } else {
@@ -749,5 +775,231 @@ internal object SettingsSummary {
         ) + " 天"
     } else {
         "与真实时间一致"
+    }
+}
+
+// ---------- 壁纸与磨砂 ----------
+
+@Composable
+private fun WallpaperPage(state: SettingsUiState, vm: SettingsViewModel, onBack: () -> Unit) {
+    val settings = state.settings
+    val wallpaper = state.wallpaper
+
+    LaunchedEffect(Unit) { vm.loadWallpaper() }
+
+    PageScaffold(SettingsGroup.WALLPAPER, onBack) {
+        item {
+            MeowCard {
+                SectionHeader(
+                    title = "每日壁纸",
+                    subtitle = "微软 Bing 每日一图，按屏幕尺寸自动选图",
+                )
+                MeowSwitchRow(
+                    title = "使用每日壁纸",
+                    description = "只在「磨砂玻璃」风格下生效；需要能访问 cn.bing.com",
+                    checked = settings.wallpaperEnabled,
+                    onCheckedChange = vm::setWallpaperEnabled,
+                    icon = Icons.Rounded.Wallpaper,
+                )
+                if (settings.wallpaperEnabled) {
+                    Spacer(Modifier.height(14.dp))
+                    WallpaperPreview(file = wallpaper.file)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = wallpaper.meta?.title?.takeIf { it.isNotBlank() } ?: "正在获取今日壁纸…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (!wallpaper.meta?.copyright.isNullOrBlank()) {
+                        Text(
+                            text = wallpaper.meta.copyright,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    MeowOutlinedButton(
+                        text = if (wallpaper.busy) "处理中…" else "下载今日壁纸",
+                        onClick = vm::downloadWallpaper,
+                        enabled = !wallpaper.busy && wallpaper.file != null,
+                        icon = Icons.Rounded.Download,
+                    )
+                }
+            }
+        }
+
+        item {
+            MeowCard {
+                SectionHeader(title = "显示方式", subtitle = "和 Windows 的铺法一致")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    WallpaperScale.entries.forEach { scale ->
+                        ActionChip(
+                            text = scale.label,
+                            selected = settings.wallpaperScale == scale,
+                            onClick = { vm.setWallpaperScale(scale) },
+                        )
+                    }
+                }
+                Text(
+                    text = settings.wallpaperScale.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp),
+                )
+            }
+        }
+
+        item {
+            MeowCard {
+                SectionHeader(title = "可读性", subtitle = "背景越花，越需要压一压")
+                MeowSliderRow(
+                    title = "模糊强度",
+                    valueText = "${settings.wallpaperBlur} dp",
+                    value = settings.wallpaperBlur.toFloat(),
+                    onValueChange = { vm.setWallpaperBlur(it.roundToInt()) },
+                    valueRange = 0f..48f,
+                    description = "默认 24dp，比 iOS 的浅磨砂重得多——背诵时背景不该抢注意力",
+                )
+                MeowDivider()
+                MeowSliderRow(
+                    title = "遮罩浓度",
+                    valueText = "${(settings.wallpaperScrim * 100).roundToInt()}%",
+                    value = settings.wallpaperScrim.toFloat(),
+                    onValueChange = { vm.setWallpaperScrim(it.toDouble()) },
+                    valueRange = 0f..0.7f,
+                    description = "压一层暗色，保证白字在亮照片上也能读",
+                )
+            }
+        }
+
+        item {
+            MeowCard {
+                SectionHeader(title = "磨砂色调", subtitle = "亮磨砂更通透，暗磨砂更沉")
+                MeowSegmented(
+                    options = listOf("跟随系统", "亮磨砂", "暗磨砂"),
+                    selectedIndex = GlassTone.entries.indexOf(settings.glassTone),
+                    onSelect = { index -> vm.setGlassTone(GlassTone.entries[index]) },
+                )
+            }
+        }
+
+        item {
+            MeowCard {
+                SectionHeader(title = "强调色", subtitle = "按钮与高亮用的主色")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AccentSwatch(
+                        color = MaterialTheme.colorScheme.primary,
+                        label = "默认",
+                        selected = settings.accentChoice == AccentChoice.SYSTEM,
+                        onClick = { vm.setAccent(AccentChoice.SYSTEM) },
+                    )
+                    MeowAccents.presets.forEach { (choice, color) ->
+                        AccentSwatch(
+                            color = color,
+                            label = choice.label,
+                            selected = settings.accentChoice == choice,
+                            onClick = { vm.setAccent(choice) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "自定义色相",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AccentSwatch(
+                        color = Color(settings.accentCustomArgb),
+                        label = "自选",
+                        selected = settings.accentChoice == AccentChoice.CUSTOM,
+                        onClick = { vm.setAccent(AccentChoice.CUSTOM) },
+                    )
+                }
+                MeowSliderRow(
+                    title = "色相",
+                    valueText = "${MeowAccents.hueOf(Color(settings.accentCustomArgb)).roundToInt()}°",
+                    value = MeowAccents.hueOf(Color(settings.accentCustomArgb)),
+                    onValueChange = { vm.setAccentHue(it) },
+                    valueRange = 0f..360f,
+                    description = "拖动即选中「自选」；饱和度与亮度已固定在好看的范围",
+                )
+            }
+        }
+    }
+}
+
+/** 强调色色点。 */
+@Composable
+private fun AccentSwatch(
+    color: Color,
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(color)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                    shape = CircleShape,
+                )
+                .clickable(onClick = onClick),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** 壁纸预览：直接解码本地缓存图，尺寸不大（≤2200px），一张 8MB 左右可接受。 */
+@Composable
+private fun WallpaperPreview(file: java.io.File?) {
+    val painter = remember(file?.path, file?.lastModified()) {
+        file?.let { target ->
+            runCatching {
+                android.graphics.BitmapFactory.decodeFile(target.path)
+                    ?.asImageBitmap()
+                    ?.let { BitmapPainter(it) }
+            }.getOrNull()
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (painter != null) {
+            Image(
+                painter = painter,
+                contentDescription = "今日壁纸预览",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = "预览准备中…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

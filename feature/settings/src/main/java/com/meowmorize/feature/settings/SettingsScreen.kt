@@ -257,6 +257,8 @@ private fun SettingsHome(
             item {
                 MeowCard {
                     SectionHeader(title = "系统", subtitle = "和系统、版本打交道的部分")
+                    GroupRow(SettingsGroup.WALLPAPER, SettingsSummary.wallpaper(state.settings), onOpenGroup)
+                    MeowDivider()
                     GroupRow(SettingsGroup.CALENDAR, SettingsSummary.calendar(state.settings), onOpenGroup)
                     MeowDivider()
                     GroupRow(SettingsGroup.UPDATE, SettingsSummary.update(state), onOpenGroup)
@@ -388,6 +390,13 @@ private val ALL_HITS: List<SettingHit> = listOf(
 
     SettingHit("界面风格", SettingsGroup.APPEARANCE),
     SettingHit("主题模式", SettingsGroup.APPEARANCE),
+
+    SettingHit("每日壁纸", SettingsGroup.WALLPAPER),
+    SettingHit("壁纸显示方式", SettingsGroup.WALLPAPER),
+    SettingHit("壁纸模糊", SettingsGroup.WALLPAPER),
+    SettingHit("磨砂色调", SettingsGroup.WALLPAPER),
+    SettingHit("强调色", SettingsGroup.WALLPAPER),
+    SettingHit("下载壁纸", SettingsGroup.WALLPAPER),
 
     SettingHit("日历同步", SettingsGroup.CALENDAR),
     SettingHit("同步窗口", SettingsGroup.CALENDAR),

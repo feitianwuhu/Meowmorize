@@ -12,6 +12,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.meowmorize.core.domain.repository.SettingsRepository
+import com.meowmorize.core.model.AccentChoice
+import com.meowmorize.core.model.GlassTone
+import com.meowmorize.core.model.WallpaperScale
 import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.model.TaskSortOrder
 import com.meowmorize.core.model.TodayState
@@ -64,6 +67,13 @@ class SettingsRepositoryImpl @Inject constructor(
             appStyle = AppStyle.fromName(this[Keys.APP_STYLE]),
             onboarded = this[Keys.ONBOARDED] ?: defaults.onboarded,
             autoCheckUpdate = this[Keys.AUTO_CHECK_UPDATE] ?: defaults.autoCheckUpdate,
+            wallpaperEnabled = this[Keys.WALLPAPER_ENABLED] ?: defaults.wallpaperEnabled,
+            wallpaperScale = WallpaperScale.fromName(this[Keys.WALLPAPER_SCALE]),
+            wallpaperBlur = this[Keys.WALLPAPER_BLUR] ?: defaults.wallpaperBlur,
+            wallpaperScrim = this[Keys.WALLPAPER_SCRIM] ?: defaults.wallpaperScrim,
+            glassTone = GlassTone.fromName(this[Keys.GLASS_TONE]),
+            accentChoice = AccentChoice.fromName(this[Keys.ACCENT_CHOICE]),
+            accentCustomArgb = this[Keys.ACCENT_CUSTOM] ?: defaults.accentCustomArgb,
             lastUpdateCheckAt = this[Keys.LAST_UPDATE_CHECK] ?: defaults.lastUpdateCheckAt,
             maxIntervalDays = this[Keys.MAX_INTERVAL_DAYS] ?: defaults.maxIntervalDays,
             intervalFuzzEnabled = this[Keys.INTERVAL_FUZZ] ?: defaults.intervalFuzzEnabled,
@@ -96,6 +106,13 @@ class SettingsRepositoryImpl @Inject constructor(
         this[Keys.APP_STYLE] = settings.appStyle.name
         this[Keys.ONBOARDED] = settings.onboarded
         this[Keys.AUTO_CHECK_UPDATE] = settings.autoCheckUpdate
+        this[Keys.WALLPAPER_ENABLED] = settings.wallpaperEnabled
+        this[Keys.WALLPAPER_SCALE] = settings.wallpaperScale.name
+        this[Keys.WALLPAPER_BLUR] = settings.wallpaperBlur
+        this[Keys.WALLPAPER_SCRIM] = settings.wallpaperScrim
+        this[Keys.GLASS_TONE] = settings.glassTone.name
+        this[Keys.ACCENT_CHOICE] = settings.accentChoice.name
+        this[Keys.ACCENT_CUSTOM] = settings.accentCustomArgb
         this[Keys.LAST_UPDATE_CHECK] = settings.lastUpdateCheckAt
         this[Keys.MAX_INTERVAL_DAYS] = settings.maxIntervalDays
         this[Keys.INTERVAL_FUZZ] = settings.intervalFuzzEnabled
@@ -165,7 +182,15 @@ class SettingsRepositoryImpl @Inject constructor(
             UserSettings.MIN_TREND_WINDOW,
             UserSettings.MAX_TREND_WINDOW,
         ),
+        wallpaperBlur = wallpaperBlur.coerceIn(MIN_WALLPAPER_BLUR, MAX_WALLPAPER_BLUR),
+        wallpaperScrim = wallpaperScrim.coerceIn(0.0, MAX_WALLPAPER_SCRIM),
     )
+
+    private companion object {
+        const val MIN_WALLPAPER_BLUR = 0
+        const val MAX_WALLPAPER_BLUR = 48
+        const val MAX_WALLPAPER_SCRIM = 0.7
+    }
 
     private object Keys {
         val DAILY_CAPACITY = intPreferencesKey("daily_capacity_minutes")
@@ -179,6 +204,13 @@ class SettingsRepositoryImpl @Inject constructor(
         val ONBOARDED = booleanPreferencesKey("onboarded")
         val AUTO_CHECK_UPDATE = booleanPreferencesKey("auto_check_update")
         val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
+        val WALLPAPER_ENABLED = booleanPreferencesKey("wallpaper_enabled")
+        val WALLPAPER_SCALE = stringPreferencesKey("wallpaper_scale")
+        val WALLPAPER_BLUR = intPreferencesKey("wallpaper_blur")
+        val WALLPAPER_SCRIM = doublePreferencesKey("wallpaper_scrim")
+        val GLASS_TONE = stringPreferencesKey("glass_tone")
+        val ACCENT_CHOICE = stringPreferencesKey("accent_choice")
+        val ACCENT_CUSTOM = longPreferencesKey("accent_custom_argb")
         val CALENDAR_SYNC_ENABLED = booleanPreferencesKey("calendar_sync_enabled")
         val CALENDAR_SYNC_WINDOW = intPreferencesKey("calendar_sync_window_hours")
         val MAX_INTERVAL_DAYS = intPreferencesKey("srs_max_interval_days")

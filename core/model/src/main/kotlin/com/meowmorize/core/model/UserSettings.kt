@@ -40,6 +40,23 @@ data class UserSettings(
     val librarySortOrder: TaskSortOrder = TaskSortOrder.RECENT_UPDATED,
     /** 是否已完成新手引导（用于首次进入时插入示例数据说明）。 */
     val onboarded: Boolean = false,
+
+    // ---------- 壁纸与磨砂（GLASS 风格） ----------
+
+    /** 使用微软 Bing 每日壁纸作为背景。 */
+    val wallpaperEnabled: Boolean = true,
+    /** 壁纸铺法。 */
+    val wallpaperScale: WallpaperScale = WallpaperScale.FILL,
+    /** 壁纸模糊半径（dp）。默认比 iOS 更重，避免背诵时被画面干扰。 */
+    val wallpaperBlur: Int = 24,
+    /** 壁纸上的遮罩浓度（0–0.7），保证文字对比度。 */
+    val wallpaperScrim: Double = 0.35,
+    /** 磨砂玻璃明暗。 */
+    val glassTone: GlassTone = GlassTone.SYSTEM,
+    /** 强调色来源。 */
+    val accentChoice: AccentChoice = AccentChoice.SYSTEM,
+    /** 自定义强调色（ARGB）。 */
+    val accentCustomArgb: Long = 0xFF3B82F6,
     /** 启动时是否自动检查更新。只提示新版本，不自动下载、不自动安装。 */
     val autoCheckUpdate: Boolean = true,
     /** 上次检查更新的时间戳（毫秒）。仅用于节流，不出现在界面上。 */

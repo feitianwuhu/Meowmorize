@@ -15,8 +15,35 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import com.meowmorize.core.domain.repository.WallpaperRepository
+import com.meowmorize.core.model.AccentChoice
+import com.meowmorize.core.model.GlassTone
+import com.meowmorize.core.model.WallpaperScale
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/**
+ * 顶层外观状态：风格、强调色、磨砂明暗、壁纸。
+ *
+ * 壁纸文件也放在这里：它由设置变化驱动加载（切到 GLASS 或打开壁纸才会去下载），
+ * 放在 ViewModel 才能跨 Activity 重建保持。
+ */
+data class AppearanceState(
+    val style: AppStyle = AppStyle.SOFT_CARD,
+    val accentChoice: AccentChoice = AccentChoice.SYSTEM,
+    val accentCustomArgb: Long = 0xFF3B82F6,
+    val glassTone: GlassTone = GlassTone.SYSTEM,
+    val wallpaperEnabled: Boolean = true,
+    val wallpaperScale: WallpaperScale = WallpaperScale.FILL,
+    val wallpaperBlur: Int = 24,
+    val wallpaperScrim: Double = 0.35,
+    val wallpaperFile: java.io.File? = null,
+)
 
 /**
  * 顶层状态：主题、界面风格，以及「有新版」的提示。
@@ -27,6 +54,7 @@ import javax.inject.Inject
 class AppViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val checkUpdate: CheckUpdateUseCase,
+    private val wallpaperRepository: WallpaperRepository,
 ) : ViewModel() {
 
     val themeMode: StateFlow<ThemeMode> = settingsRepository.settings
@@ -44,6 +72,43 @@ class AppViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = AppStyle.SOFT_CARD,
         )
+
+    /**
+     * 壁纸文件：只有 GLASS + 开启壁纸时才去取（必要时联网下载当天的图）。
+     * 用 mapLatest：用户来回切开关时，前一次下载会被取消，不会堆积。
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val wallpaperFile: Flow<java.io.File?> = settingsRepository.settings
+        .map { it.appStyle == AppStyle.GLASS && it.wallpaperEnabled }
+        .distinctUntilChanged()
+        .mapLatest { enabled ->
+            if (!enabled) {
+                null
+            } else {
+                runCatching { wallpaperRepository.ensureDownloaded()?.second }.getOrNull()
+            }
+        }
+
+    val appearance: StateFlow<AppearanceState> = combine(
+        settingsRepository.settings,
+        wallpaperFile,
+    ) { settings, wallpaper ->
+        AppearanceState(
+            style = settings.appStyle,
+            accentChoice = settings.accentChoice,
+            accentCustomArgb = settings.accentCustomArgb,
+            glassTone = settings.glassTone,
+            wallpaperEnabled = settings.wallpaperEnabled,
+            wallpaperScale = settings.wallpaperScale,
+            wallpaperBlur = settings.wallpaperBlur,
+            wallpaperScrim = settings.wallpaperScrim,
+            wallpaperFile = wallpaper,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = AppearanceState(),
+    )
 
     private val _updatePrompt = MutableStateFlow<UpdateInfo?>(null)
 

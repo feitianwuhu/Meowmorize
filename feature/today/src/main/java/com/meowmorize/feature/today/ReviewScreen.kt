@@ -57,6 +57,7 @@ import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
 import com.meowmorize.core.designsystem.component.MeowDivider
+import com.meowmorize.core.designsystem.component.MeowOutlinedButton
 import com.meowmorize.core.designsystem.component.MeowIconButton
 import com.meowmorize.core.designsystem.component.PillTag
 import com.meowmorize.core.designsystem.component.SubjectLabel
@@ -84,7 +85,6 @@ fun ReviewRoute(
     ReviewScreen(
         state = state,
         onBack = onBack,
-        onReveal = viewModel::reveal,
         onShowHint = viewModel::showHint,
         onHideHint = viewModel::hideHint,
         onSelectGrade = viewModel::selectGrade,
@@ -96,7 +96,6 @@ fun ReviewRoute(
 fun ReviewScreen(
     state: ReviewUiState,
     onBack: () -> Unit,
-    onReveal: () -> Unit,
     onShowHint: () -> Unit,
     onHideHint: () -> Unit,
     onSelectGrade: (RecallGrade) -> Unit,
@@ -188,22 +187,9 @@ fun ReviewScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // 这里只留「提示」。「显示答案 / 显示内容」统一放到下面的卡片里——
-            // 之前顶部和卡片各放一个，同一屏会出现两个一模一样的按钮。
-            if (hasHint) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MeowChip(
-                        text = if (state.hintVisible) "隐藏提示" else "显示提示",
-                        selected = state.hintVisible,
-                        onClick = if (state.hintVisible) onHideHint else onShowHint,
-                    )
-                }
-            }
-
             Spacer(Modifier.height(12.dp))
-            // 答案一律可有可无：
-            // · 填了答案 → 先看「背诵内容」，答案待揭
-            // · 没填答案（老数据 / 纯记忆内容）→ 先回忆，再揭内容
+            // 揭示动作只剩一种触发方式：点下方熟练度。评分即揭晓——
+            // 先凭记忆判断，再看对照，这才是复习真正发生的那一刻。
             val answer = item.clozeAnswer?.takeIf { it.isNotBlank() }
             val revealIn = meowTween<Float>(MeowMotion.BASE)
             val revealOut = meowTween<Float>(MeowMotion.FAST)
@@ -232,7 +218,11 @@ fun ReviewScreen(
                                 )
                             }
                         } else {
-                            MeowChip(text = "显示答案", onClick = onReveal, selected = false)
+                            Text(
+                                text = "在心里过一遍，然后点下方熟练度——答案会在评分后出现",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 } else {
@@ -255,16 +245,10 @@ fun ReviewScreen(
                                 )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    text = if (hasHint) {
-                                        "想不起来可以看提示，但用过提示就不能选「轻松」。"
-                                    } else {
-                                        "想不起来也没关系，点开对照才是记忆真正发生的时候。"
-                                    },
+                                    text = "回想完就点下方熟练度，内容会在评分后出现",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Spacer(Modifier.height(18.dp))
-                                MeowChip(text = "显示内容", onClick = onReveal, selected = false)
                             }
                         }
                     }
@@ -334,6 +318,9 @@ fun ReviewScreen(
             enabled = !state.isLocked,
             onSelect = onSelectGrade,
             onConfirm = onConfirm,
+            canShowHint = hasHint,
+            hintVisible = state.hintVisible,
+            onToggleHint = if (state.hintVisible) onHideHint else onShowHint,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
 
@@ -388,6 +375,9 @@ private fun GradeBar(
     enabled: Boolean,
     onSelect: (RecallGrade) -> Unit,
     onConfirm: () -> Unit,
+    canShowHint: Boolean,
+    hintVisible: Boolean,
+    onToggleHint: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMeowColors.current
@@ -406,6 +396,15 @@ private fun GradeBar(
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         Column {
+            // 唯一的「求援」入口，放在拇指最容易够到的位置，做成整宽按钮
+            if (canShowHint) {
+                MeowOutlinedButton(
+                    text = if (hintVisible) "收起提示" else "显示提示",
+                    onClick = onToggleHint,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+            }
             AnimatedVisibility(
                 visible = selectedGrade != null,
                 enter = fadeIn(meowTween(MeowMotion.FAST)) +

@@ -9,6 +9,7 @@ import com.meowmorize.core.data.time.AdjustableTimeProvider
 import com.meowmorize.core.data.settings.SettingsRepositoryImpl
 import com.meowmorize.core.data.update.AndroidAppVersionProvider
 import com.meowmorize.core.data.update.GitHubUpdateRepository
+import com.meowmorize.core.data.wallpaper.BingWallpaperRepository
 import com.meowmorize.core.data.repository.StudyRepositoryImpl
 import com.meowmorize.core.domain.repository.CalendarRepository
 import com.meowmorize.core.domain.repository.CalendarSyncRepository
@@ -18,6 +19,7 @@ import com.meowmorize.core.domain.repository.SettingsRepository
 import com.meowmorize.core.domain.repository.StudyRepository
 import com.meowmorize.core.domain.repository.TimeTravelRepository
 import com.meowmorize.core.domain.repository.UpdateRepository
+import com.meowmorize.core.domain.repository.WallpaperRepository
 import com.meowmorize.core.domain.plan.TodayPlanGenerator
 import com.meowmorize.core.domain.srs.FsrsScheduler
 import com.meowmorize.core.domain.text.DurationEstimator
@@ -70,6 +72,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAppVersionProvider(impl: AndroidAppVersionProvider): AppVersionProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindWallpaperRepository(impl: BingWallpaperRepository): WallpaperRepository
 
     /** 同一个实例同时提供「当前时间」与「时间快进」能力，保证两边看到的偏移一致。 */
     @Binds

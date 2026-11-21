@@ -139,10 +139,6 @@ class ReviewViewModel @Inject constructor(
     }
 
     /** 主动展开答案（不看评分）。 */
-    fun reveal() {
-        local.value = local.value.copy(revealed = true)
-    }
-
     /**
      * 点熟练度：展开答案并进入「待确认」状态。
      * 用过提示后「轻松」不再可选择——这是提示的代价，避免提示被当成免费加成。

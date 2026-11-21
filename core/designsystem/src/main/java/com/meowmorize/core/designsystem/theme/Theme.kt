@@ -2,6 +2,7 @@ package com.meowmorize.core.designsystem.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -109,16 +110,27 @@ val MeowShapes = Shapes(
 fun MeowTheme(
     style: AppStyle = AppStyle.SOFT_CARD,
     darkTheme: Boolean = isSystemInDarkTheme(),
+    /** 强调色覆盖；null 表示沿用原色板。 */
+    accent: Color? = null,
+    /** GLASS 风格下的明暗（用户可选跟随系统 / 亮 / 暗）。 */
+    glassDark: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val terminal = style == AppStyle.TERMINAL
-    // 终端风格以近黑为底，本身就是深色界面，不再跟随浅色模式
-    val dark = terminal || darkTheme
+    val glass = style == AppStyle.GLASS
+    // 终端风格以近黑为底；磨砂风格按用户选择的明暗，其余跟随系统
+    val dark = when {
+        terminal -> true
+        glass -> glassDark
+        else -> darkTheme
+    }
 
+    val effectiveAccent = accent
     val colorScheme = when {
-        terminal -> TerminalScheme
-        darkTheme -> DarkScheme
-        else -> LightScheme
+        terminal -> TerminalScheme.withAccent(effectiveAccent)
+        glass -> glassScheme(dark = dark, accent = effectiveAccent ?: GlassFallbackAccent)
+        darkTheme -> DarkScheme.withAccent(effectiveAccent)
+        else -> LightScheme.withAccent(effectiveAccent)
     }
 
     val extras = when {
@@ -132,6 +144,24 @@ fun MeowTheme(
             isDark = true,
             chart = ChartPalette(),
         )
+        glass -> MeowExtraColors(
+            success = if (dark) SuccessGreenDark else SuccessGreen,
+            onSuccess = if (dark) Color(0xFF04291A) else Color.White,
+            warning = WarningAmber,
+            danger = if (dark) DangerRedDark else DangerRed,
+            // 玻璃风格没有「实色容器」，低/高容器都用半透明白，叠在壁纸上
+            containerLow = Color.White.copy(alpha = if (dark) 0.07f else 0.30f),
+            containerHigh = Color.White.copy(alpha = if (dark) 0.12f else 0.46f),
+            isDark = dark,
+            chart = ChartPalette(
+                seriesA = effectiveAccent ?: GlassFallbackAccent,
+                seriesB = if (dark) AccentBlueDark else AccentBlue,
+                positive = if (dark) SuccessGreenDark else SuccessGreen,
+                neutral = if (dark) Color(0xFF8A9099) else Color(0xFFB4B2A9),
+                grid = Color.White.copy(alpha = if (dark) 0.12f else 0.45f),
+                axis = Color.White.copy(alpha = if (dark) 0.18f else 0.55f),
+            ),
+        )
         darkTheme -> MeowExtraColors(
             success = SuccessGreenDark,
             onSuccess = Color(0xFF04291A),
@@ -141,7 +171,7 @@ fun MeowTheme(
             containerHigh = DarkSurfaceVariant,
             isDark = true,
             chart = ChartPalette(
-                seriesA = AccentOrangeDark,
+                seriesA = effectiveAccent ?: AccentOrangeDark,
                 seriesB = AccentBlueDark,
                 positive = SuccessGreenDark,
                 neutral = DarkOnSurfaceVariant,
@@ -158,7 +188,7 @@ fun MeowTheme(
             containerHigh = LightSurfaceVariant,
             isDark = false,
             chart = ChartPalette(
-                seriesA = AccentOrange,
+                seriesA = effectiveAccent ?: AccentOrange,
                 seriesB = AccentBlue,
                 positive = SuccessGreen,
                 neutral = Color(0xFFB4B2A9),
@@ -179,4 +209,57 @@ fun MeowTheme(
             content = content,
         )
     }
+}
+
+/** 磨砂风格默认强调色（用户没选时的冷蓝，比暖橙更衬照片）。 */
+internal val GlassFallbackAccent = Color(0xFF3B82F6)
+
+/** 只替换强调色相关的槽位，其余沿用原色板。 */
+private fun ColorScheme.withAccent(accent: Color?): ColorScheme {
+    if (accent == null) return this
+    val onAccent = MeowAccents.onColor(accent)
+    return copy(
+        primary = accent,
+        onPrimary = onAccent,
+        primaryContainer = accent.copy(alpha = 0.18f),
+        onPrimaryContainer = onAccent,
+        inversePrimary = accent,
+    )
+}
+
+/**
+ * 磨砂玻璃配色。
+ *
+ * 关键点：surface / surfaceVariant 都是**半透明白**，`background` 是 Transparent。
+ * 这样卡片、按钮、底栏不需要各自写玻璃效果——它们本来就用 surface，
+ * 叠在壁纸上天然就是磨砂。Border 用极淡的白，靠 1px 亮边而不是投影塑造厚度。
+ */
+private fun glassScheme(dark: Boolean, accent: Color): ColorScheme {
+    val base = if (dark) darkColorScheme() else lightColorScheme()
+    val onSurface = if (dark) Color(0xFFF4F5F7) else Color(0xFF14161A)
+    val onSurfaceVariant = if (dark) Color(0xFFD5D9DF) else Color(0xFF464B53)
+    val surfaceAlpha = if (dark) 0.14f else 0.58f
+    val variantAlpha = if (dark) 0.09f else 0.40f
+    val onAccent = MeowAccents.onColor(accent)
+    return base.copy(
+        primary = accent,
+        onPrimary = onAccent,
+        primaryContainer = accent.copy(alpha = 0.22f),
+        onPrimaryContainer = onAccent,
+        background = Color.Transparent,
+        onBackground = onSurface,
+        surface = Color.White.copy(alpha = surfaceAlpha),
+        onSurface = onSurface,
+        surfaceVariant = Color.White.copy(alpha = variantAlpha),
+        onSurfaceVariant = onSurfaceVariant,
+        surfaceContainerLowest = Color.Transparent,
+        surfaceContainerLow = Color.White.copy(alpha = if (dark) 0.08f else 0.34f),
+        surfaceContainer = Color.White.copy(alpha = if (dark) 0.11f else 0.44f),
+        surfaceContainerHigh = Color.White.copy(alpha = if (dark) 0.15f else 0.52f),
+        surfaceContainerHighest = Color.White.copy(alpha = if (dark) 0.19f else 0.60f),
+        surfaceTint = accent,
+        outline = Color.White.copy(alpha = if (dark) 0.24f else 0.60f),
+        outlineVariant = Color.White.copy(alpha = if (dark) 0.13f else 0.35f),
+        error = if (dark) DangerRedDark else DangerRed,
+    )
 }
