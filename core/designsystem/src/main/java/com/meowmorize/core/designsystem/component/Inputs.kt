@@ -1,8 +1,14 @@
 package com.meowmorize.core.designsystem.component
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,14 +31,23 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowPressScale
+import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.theme.LocalAppStyle
 import com.meowmorize.core.model.AppStyle
 
@@ -104,35 +120,63 @@ fun MeowSegmented(
     val terminal = LocalAppStyle.current == AppStyle.TERMINAL
     val outerRadius = if (terminal) 4.dp else 16.dp
     val innerRadius = if (terminal) 2.dp else 13.dp
-    Row(
+    // 选中块用一个统一滑动的指示器，而不是每项自己换底色：
+    // 这样切换时是「一块跟着走」，与 iOS 分段控件一致，也顺带解决了文字闪色。
+    val gap = 4.dp
+    BoxWithConstraints(
         modifier = modifier
             .clip(RoundedCornerShape(outerRadius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        options.forEachIndexed { index, option ->
-            val selected = index == selectedIndex
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(innerRadius))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                    )
-                    .clickable { onSelect(index) }
-                    .padding(vertical = 9.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = option,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (selected) {
+        val density = LocalDensity.current
+        var rowHeightPx by remember { mutableStateOf(0) }
+        val count = options.size.coerceAtLeast(1)
+        val segmentWidth = (maxWidth - gap * (count - 1)) / count
+        val offset by animateDpAsState(
+            targetValue = segmentWidth * selectedIndex + gap * selectedIndex,
+            animationSpec = meowTween(MeowMotion.BASE, MeowMotion.easeOut),
+            label = "segmentOffset",
+        )
+
+        Box(
+            modifier = Modifier
+                .offset(x = offset)
+                .width(segmentWidth)
+                .height(with(density) { rowHeightPx.toDp() })
+                .clip(RoundedCornerShape(innerRadius))
+                .background(MaterialTheme.colorScheme.surface),
+        )
+
+        Row(
+            modifier = Modifier.onSizeChanged { rowHeightPx = it.height },
+            horizontalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            options.forEachIndexed { index, option ->
+                val selected = index == selectedIndex
+                val textColor by animateColorAsState(
+                    targetValue = if (selected) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
+                    animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+                    label = "segmentText",
                 )
+                Box(
+                    modifier = Modifier
+                        .width(segmentWidth)
+                        .clip(RoundedCornerShape(innerRadius))
+                        .clickable { onSelect(index) }
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = option,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = textColor,
+                    )
+                }
             }
         }
     }
@@ -326,12 +370,19 @@ fun MeowStepper(
 
 @Composable
 private fun StepButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(30.dp)
             .clip(CircleShape)
+            .meowPressScale(interactionSource = interaction, pressedScale = 0.9f)
             .background(MaterialTheme.colorScheme.surface)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                enabled = enabled,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(

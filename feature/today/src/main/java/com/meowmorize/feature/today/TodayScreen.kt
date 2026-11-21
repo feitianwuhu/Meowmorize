@@ -1,5 +1,7 @@
 package com.meowmorize.feature.today
 
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -55,6 +57,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meowmorize.core.common.format.Formatters
 import com.meowmorize.core.designsystem.component.EmptyState
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowIconButton
 import com.meowmorize.core.designsystem.component.MeowProgressBar
@@ -202,11 +206,14 @@ fun TodayScreen(
                     }
 
                     items(pending, key = { it.item.id }) { task ->
-                        TaskCard(
-                            task = task,
-                            onClick = { onOpenReview(task.item.id) },
-                            onEdit = { onEditTask(task.item.id) },
-                        )
+                        // 勾掉一条后它要从「待办」移到「已完成」：不加位置动画就是硬跳
+                        Box(modifier = Modifier.animateItem()) {
+                            TaskCard(
+                                task = task,
+                                onClick = { onOpenReview(task.item.id) },
+                                onEdit = { onEditTask(task.item.id) },
+                            )
+                        }
                     }
 
                     val completed = plan.tasks.filter { it.completed }
@@ -215,7 +222,9 @@ fun TodayScreen(
                             SectionHeader(title = "已完成", subtitle = "${completed.size} 条")
                         }
                         items(completed, key = { "done-${it.item.id}" }) { task ->
-                            CompletedRow(task)
+                            Box(modifier = Modifier.animateItem()) {
+                                CompletedRow(task)
+                            }
                         }
                     }
                 }
@@ -521,8 +530,17 @@ private fun MessageBanner(
     }
     AnimatedVisibility(
         visible = message != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
+        // 从上方 6dp 落下 + 淡入：比纯淡入更像「一条提示被推出来」
+        enter = fadeIn(meowTween(MeowMotion.BASE)) +
+            slideInVertically(
+                initialOffsetY = { -it / 3 },
+                animationSpec = meowTween(MeowMotion.ENTER, MeowMotion.easeOut),
+            ),
+        exit = fadeOut(meowTween(MeowMotion.FAST)) +
+            slideOutVertically(
+                targetOffsetY = { -it / 3 },
+                animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+            ),
         modifier = modifier.padding(top = 8.dp),
     ) {
         Box(

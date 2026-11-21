@@ -6,6 +6,12 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +52,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowDivider
 import com.meowmorize.core.designsystem.component.MeowSettingRow
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.component.SectionHeader
 import kotlinx.coroutines.delay
 
@@ -106,21 +114,45 @@ fun SettingsRoute(viewModel: SettingsViewModel = hiltViewModel()) {
         }
     }
 
+    // 过渡规格要在组合里算好：transitionSpec 的 lambda 不是 @Composable
+    val pageEnterSpec = meowTween<androidx.compose.ui.unit.IntOffset>(MeowMotion.ENTER, MeowMotion.easeOut)
+    val pageExitSpec = meowTween<androidx.compose.ui.unit.IntOffset>(MeowMotion.EXIT, MeowMotion.easeOut)
+    val fadeFastSpec = meowTween<Float>(MeowMotion.FAST)
+    val fadeBaseSpec = meowTween<Float>(MeowMotion.BASE)
+
     Box(modifier = Modifier.fillMaxSize()) {
-        if (openGroup == null) {
-            SettingsHome(
-                state = state,
-                onOpenGroup = { group -> openGroupName = group.name },
-            )
-        } else {
-            SettingsGroupPage(
-                group = openGroup,
-                state = state,
-                viewModel = viewModel,
-                onBack = { openGroupName = null },
-                onToggleCalendarSync = onToggleCalendarSync,
-                onOpenUrl = onOpenUrl,
-            )
+        AnimatedContent(
+            targetState = openGroup,
+            transitionSpec = {
+                if (targetState != null) {
+                    // 进二级页：从右侧轻推入（只移 1/6 屏，不做整屏平移）
+                    (slideInHorizontally(pageEnterSpec) { it / 6 } + fadeIn(fadeBaseSpec))
+                        .togetherWith(fadeOut(fadeFastSpec))
+                } else {
+                    // 返回：二级页向右让开，主页淡入并轻微回位
+                    (fadeIn(fadeBaseSpec) + slideInHorizontally(pageEnterSpec) { -it / 10 })
+                        .togetherWith(
+                            slideOutHorizontally(pageExitSpec) { it / 6 } + fadeOut(fadeFastSpec),
+                        )
+                }
+            },
+            label = "settingsPage",
+        ) { group ->
+            if (group == null) {
+                SettingsHome(
+                    state = state,
+                    onOpenGroup = { target -> openGroupName = target.name },
+                )
+            } else {
+                SettingsGroupPage(
+                    group = group,
+                    state = state,
+                    viewModel = viewModel,
+                    onBack = { openGroupName = null },
+                    onToggleCalendarSync = onToggleCalendarSync,
+                    onOpenUrl = onOpenUrl,
+                )
+            }
         }
 
         if (state.message != null) {

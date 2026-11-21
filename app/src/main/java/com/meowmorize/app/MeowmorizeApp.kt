@@ -1,5 +1,11 @@
 package com.meowmorize.app
 
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +29,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.motionMs
 import com.meowmorize.core.designsystem.component.MeowBottomBar
 import com.meowmorize.core.designsystem.component.MeowNavItem
 import com.meowmorize.core.designsystem.theme.LocalAppStyle
@@ -55,12 +63,19 @@ private val bottomNavItems = listOf(
     MeowNavItem(Routes.SETTINGS, "设置", Icons.Rounded.Tune),
 )
 
+private fun isDetailRoute(route: String?): Boolean =
+    route == Routes.REVIEW || route == Routes.EDITOR
+
 @Composable
 fun MeowmorizeApp(modifier: Modifier = Modifier) {
     val terminalStyle = LocalAppStyle.current == AppStyle.TERMINAL
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    // 时长统一走令牌；系统关闭动画时（倍数 0）这里会退化成 0ms
+    val enterMs = motionMs(MeowMotion.ENTER)
+    val exitMs = motionMs(MeowMotion.EXIT)
+    val tabMs = motionMs(if (terminalStyle) MeowMotion.PRESS else MeowMotion.FAST)
     val showBottomBar = currentRoute == Routes.TODAY ||
         currentRoute == Routes.CALENDAR ||
         currentRoute == Routes.LIBRARY ||
@@ -77,16 +92,37 @@ fun MeowmorizeApp(modifier: Modifier = Modifier) {
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding(),
-            // 终端风格只保留极短的 dissolves（约 150ms），HyperOS 稍长一些
+            // 分两类动作：
+            // · 底部栏切页（一天几十次）→ 只做极短交叉淡化，不加位移，否则显得慢
+            // · 进入详情/编辑（偶尔）→ 从右侧轻推入，建立「它是从当前页展开的」空间关系
             enterTransition = {
-                androidx.compose.animation.fadeIn(
-                    androidx.compose.animation.core.tween(if (terminalStyle) 150 else 240),
-                )
+                if (isDetailRoute(targetState.destination.route)) {
+                    slideInHorizontally(
+                        animationSpec = tween(enterMs, easing = MeowMotion.easeOut),
+                    ) { it / 5 } + fadeIn(tween(enterMs))
+                } else {
+                    fadeIn(tween(tabMs))
+                }
             },
             exitTransition = {
-                androidx.compose.animation.fadeOut(
-                    androidx.compose.animation.core.tween(if (terminalStyle) 120 else 200),
-                )
+                // 推进详情时，下层保持不动：两层同时位移会像在互相推挤
+                if (isDetailRoute(targetState.destination.route)) {
+                    ExitTransition.None
+                } else {
+                    fadeOut(tween(tabMs))
+                }
+            },
+            popEnterTransition = {
+                fadeIn(tween(exitMs))
+            },
+            popExitTransition = {
+                if (isDetailRoute(initialState.destination.route)) {
+                    slideOutHorizontally(
+                        animationSpec = tween(exitMs, easing = MeowMotion.easeOut),
+                    ) { it / 5 } + fadeOut(tween(exitMs))
+                } else {
+                    fadeOut(tween(tabMs))
+                }
             },
         ) {
             composable(Routes.TODAY) {

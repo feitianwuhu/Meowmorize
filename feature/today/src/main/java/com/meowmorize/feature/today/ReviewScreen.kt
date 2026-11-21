@@ -1,10 +1,19 @@
 package com.meowmorize.feature.today
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.meowmorize.core.designsystem.component.MarkdownText
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowPressScale
+import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
 import com.meowmorize.core.designsystem.component.MeowDivider
@@ -212,21 +225,35 @@ fun ReviewScreen(
                         )
                     }
                     Spacer(Modifier.height(12.dp))
-                    if (state.revealed) {
-                        MeowDivider()
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = "答案",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = answer.ifBlank { "（没有填写答案）" },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                    // 揭示答案是这个页面最核心的一次状态变化：从「一枚按钮」变成
+                    // 「一段答案」，硬切会像页面闪了一下。用 AnimatedContent 让高度
+                    // 与内容一起过渡——尺寸动画在这里是必要的，不是装饰。
+                    // transitionSpec 的 lambda 不是 @Composable，规格只能在外面算好
+                    val revealIn = meowTween<Float>(MeowMotion.BASE)
+                    val revealOut = meowTween<Float>(MeowMotion.FAST)
+                    AnimatedContent(
+                        targetState = state.revealed,
+                        transitionSpec = { fadeIn(revealIn) togetherWith fadeOut(revealOut) },
+                        label = "answerReveal",
+                    ) { revealed ->
+                    if (revealed) {
+                        Column {
+                            MeowDivider()
+                            Spacer(Modifier.height(10.dp))
+                            Text(
+                                text = "答案",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = answer.ifBlank { "（没有填写答案）" },
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     } else {
                         MeowChip(text = "显示答案", onClick = onReveal, selected = false)
+                    }
                     }
                 } else if (state.revealed) {
                     if (item.contentFormat == ContentFormat.MARKDOWN) {
@@ -332,8 +359,12 @@ fun ReviewScreen(
 
         AnimatedVisibility(
             visible = state.outcome != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            // 进入：淡入 + 从 96% 放大；退出更快。绝不从 scale(0) 开始——
+            // 现实里没有东西是从「不存在」瞬间长出来的
+            enter = fadeIn(meowTween(MeowMotion.BASE)) +
+                scaleIn(initialScale = 0.96f, animationSpec = meowTween(MeowMotion.BASE, MeowMotion.easeOut)),
+            exit = fadeOut(meowTween(MeowMotion.FAST)) +
+                scaleOut(targetScale = 0.98f, animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut)),
             modifier = Modifier.align(Alignment.Center),
         ) {
             val outcome = state.outcome
@@ -395,7 +426,13 @@ private fun GradeBar(
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         Column {
-            if (selectedGrade != null) {
+            AnimatedVisibility(
+                visible = selectedGrade != null,
+                enter = fadeIn(meowTween(MeowMotion.FAST)) +
+                    expandVertically(animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut)),
+                exit = fadeOut(meowTween(MeowMotion.PRESS)) +
+                    shrinkVertically(animationSpec = meowTween(MeowMotion.PRESS, MeowMotion.easeOut)),
+            ) {
                 Text(
                     text = "点击其他熟练度可改选",
                     style = MaterialTheme.typography.labelMedium,
@@ -413,19 +450,37 @@ private fun GradeBar(
                         days == 1 -> "明天"
                         else -> "$days 天后"
                     }
+                    // 选中态直接换色会「啪」地闪一下；这里用 150ms 过渡，
+                    // 再叠一个按压缩放——评分是复习里点得最多的动作，手感要跟得上
+                    val container by animateColorAsState(
+                        targetValue = if (isSelected) color else color.copy(alpha = 0.12f),
+                        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+                        label = "gradeContainer",
+                    )
+                    val borderTint by animateColorAsState(
+                        targetValue = if (isSelected) color else color.copy(alpha = 0.25f),
+                        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+                        label = "gradeBorder",
+                    )
+                    val titleColor by animateColorAsState(
+                        targetValue = if (isSelected) Color.White else color,
+                        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+                        label = "gradeTitle",
+                    )
+                    val interaction = remember { MutableInteractionSource() }
+
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(18.dp))
-                            .background(
-                                if (isSelected) color else color.copy(alpha = 0.12f),
-                            )
-                            .border(
-                                1.dp,
-                                if (isSelected) color else color.copy(alpha = 0.25f),
-                                RoundedCornerShape(18.dp),
-                            )
-                            .clickable(enabled = enabled) {
+                            .meowPressScale(interactionSource = interaction, pressedScale = 0.96f)
+                            .background(container)
+                            .border(1.dp, borderTint, RoundedCornerShape(18.dp))
+                            .clickable(
+                                interactionSource = interaction,
+                                indication = LocalIndication.current,
+                                enabled = enabled,
+                            ) {
                                 if (isSelected) onConfirm() else onSelect(grade)
                             }
                             .padding(vertical = 12.dp),
@@ -434,7 +489,7 @@ private fun GradeBar(
                         Text(
                             text = if (isSelected) "下一步" else label,
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (isSelected) Color.White else color,
+                            color = titleColor,
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(

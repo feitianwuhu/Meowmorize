@@ -1,5 +1,6 @@
 package com.meowmorize.core.designsystem.component
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +34,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowPressScale
+import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.theme.LocalAppStyle
 import com.meowmorize.core.model.AppStyle
 
@@ -53,12 +58,22 @@ fun MeowCard(
     val terminal = LocalAppStyle.current == AppStyle.TERMINAL
     Column(
         modifier = modifier
+            // 缩放要放在链的最外层：放在背景之后只会缩内容，卡片本身不动
+            .then(
+                if (onClick != null) {
+                    Modifier.meowPressScale(interactionSource = interaction, pressedScale = 0.985f)
+                } else {
+                    Modifier
+                },
+            )
             .fillMaxWidth()
             .clip(shape)
             .background(containerColor)
             .border(BorderStroke(1.dp, borderColor.copy(alpha = if (terminal) 1f else 0.7f)), shape)
             .then(
                 if (onClick != null) {
+                    // 卡片本来就是 indication = null（去掉水波纹），
+                    // 所以按压缩放是它唯一的反馈
                     Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
                 } else {
                     Modifier
@@ -157,25 +172,39 @@ fun MeowChip(
     selected: Boolean = false,
 ) {
     val accent = MaterialTheme.colorScheme.primary
+    val interaction = remember { MutableInteractionSource() }
+
+    // 选中/未选中之间直接换色会「闪一下」，改成 150ms 的 ease 过渡
+    val background by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface,
+        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+        label = "chipBackground",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline,
+        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+        label = "chipBorder",
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+        label = "chipText",
+    )
+
     Row(
         modifier = modifier
             .clip(CircleShape)
-            .background(if (selected) accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface)
-            .border(
-                BorderStroke(
-                    1.dp,
-                    if (selected) accent.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline,
-                ),
-                CircleShape,
-            )
-            .clickable(onClick = onClick)
+            .meowPressScale(interactionSource = interaction, pressedScale = 0.96f)
+            .background(background)
+            .border(BorderStroke(1.dp, borderColor), CircleShape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = textColor,
         )
     }
 }

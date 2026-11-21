@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.meowmorize.core.designsystem.motion.MeowMotion
 
 /**
  * 环形进度。
@@ -46,7 +47,7 @@ fun ProgressRing(
 ) {
     val animated by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 650),
+        animationSpec = tween(durationMillis = 420, easing = MeowMotion.easeOut),
         label = "ringProgress",
     )
 
@@ -91,7 +92,7 @@ fun MeowProgressBar(
 ) {
     val animated by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 500),
+        animationSpec = tween(durationMillis = 360, easing = MeowMotion.easeOut),
         label = "barProgress",
     )
     Canvas(modifier = modifier.fillMaxWidth().height(height)) {

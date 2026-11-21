@@ -66,22 +66,38 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            MeowTheme(style = appStyle, darkTheme = darkTheme) {
-                MeowmorizeApp()
-
-                updatePrompt?.let { info ->
-                    UpdateAvailableDialog(
-                        info = info,
-                        onDismiss = appViewModel::dismissUpdatePrompt,
-                        onOpen = { url ->
-                            runCatching {
-                                startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            }
-                        },
+            // 系统「移除动画」/动画时长倍数：0 时所有动效退化为瞬间完成，
+            // 1 以下按比例缩短。读一次即可，运行中改动会在下次启动生效。
+            val motionScale = androidx.compose.runtime.remember {
+                runCatching {
+                    android.provider.Settings.Global.getFloat(
+                        contentResolver,
+                        "animator_duration_scale",
+                        1f,
                     )
+                }.getOrDefault(1f)
+            }
+
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.meowmorize.core.designsystem.motion.LocalMotionScale provides motionScale,
+            ) {
+                MeowTheme(style = appStyle, darkTheme = darkTheme) {
+                    MeowmorizeApp()
+
+                    updatePrompt?.let { info ->
+                        UpdateAvailableDialog(
+                            info = info,
+                            onDismiss = appViewModel::dismissUpdatePrompt,
+                            onOpen = { url ->
+                                runCatching {
+                                    startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }

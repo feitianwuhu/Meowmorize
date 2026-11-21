@@ -2,6 +2,11 @@ package com.meowmorize.feature.editor
 
 import android.app.DatePickerDialog
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -68,6 +73,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import com.meowmorize.core.designsystem.component.MarkdownText
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowTween
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
 import com.meowmorize.core.designsystem.component.MeowIconButton
@@ -406,18 +413,28 @@ fun EditorScreen(
                 )
             }
 
-            if (state.clozeEnabled) {
-                Spacer(Modifier.height(12.dp))
-                MeowTextField(
-                    value = state.clozeAnswer,
-                    onValueChange = onClozeAnswerChange,
-                    label = "答案",
-                    placeholder = "例：突发性、破坏性、广泛性、不确定性",
-                    singleLine = false,
-                    minLines = 2,
-                    maxLines = 5,
-                    supportingText = "题干里用 ______ 表示要填的位置；复习时题干可见，答案点「显示答案」才出现",
-                )
+            // 展开/收起用高度动画：手风琴是「动画高度」的正当例外，
+            // 这一块很短，代价可以接受
+            AnimatedVisibility(
+                visible = state.clozeEnabled,
+                enter = fadeIn(meowTween(MeowMotion.BASE)) +
+                    expandVertically(animationSpec = meowTween(MeowMotion.ENTER, MeowMotion.easeOut)),
+                exit = fadeOut(meowTween(MeowMotion.FAST)) +
+                    shrinkVertically(animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut)),
+            ) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    MeowTextField(
+                        value = state.clozeAnswer,
+                        onValueChange = onClozeAnswerChange,
+                        label = "答案",
+                        placeholder = "例：突发性、破坏性、广泛性、不确定性",
+                        singleLine = false,
+                        minLines = 2,
+                        maxLines = 5,
+                        supportingText = "题干里用 ______ 表示要填的位置；复习时题干可见，答案点「显示答案」才出现",
+                    )
+                }
             }
 
             Spacer(Modifier.height(10.dp))

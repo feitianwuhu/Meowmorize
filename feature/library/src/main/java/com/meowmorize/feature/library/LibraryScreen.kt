@@ -226,6 +226,8 @@ fun LibraryScreen(
                     onArchive = { onArchive(ui.item.id) },
                     onRestore = { onRestore(ui.item.id) },
                     onDelete = { onDeleteItem(ui.item.id, ui.item.topic) },
+                    // 删除/排序后让行位移有动画，避免列表「跳一下」
+                    modifier = Modifier.animateItem(),
                 )
             }
         }
@@ -351,13 +353,14 @@ private fun LibraryItemCard(
     onArchive: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val archived = ui.item.status == ItemStatus.ARCHIVED
     val subjectColor = ui.subject?.let { Color(it.colorArgb) } ?: MaterialTheme.colorScheme.outline
 
     MeowCard(
+        modifier = modifier.alpha(if (archived) 0.65f else 1f),
         onClick = onClick,
-        modifier = Modifier.alpha(if (archived) 0.65f else 1f),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SubjectDot(color = subjectColor)

@@ -1,8 +1,10 @@
 package com.meowmorize.core.designsystem.component
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -13,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.meowmorize.core.designsystem.motion.meowPressScale
 import com.meowmorize.core.designsystem.theme.LocalAppStyle
 import com.meowmorize.core.model.AppStyle
 
@@ -39,6 +43,8 @@ fun MeowPrimaryButton(
     val end = if (enabled) containerColor.copy(alpha = 0.82f) else containerColor.copy(alpha = 0.25f)
     // 终端风格禁止装饰性渐变：主按钮就是一块纯色，边界靠描边与字重
     val shape = if (terminal) MaterialTheme.shapes.small else CircleShape
+    val interaction = remember { MutableInteractionSource() }
+    val indication = LocalIndication.current
     val fill = if (terminal) {
         Modifier.background(start)
     } else {
@@ -46,9 +52,15 @@ fun MeowPrimaryButton(
     }
     Row(
         modifier = modifier
+            .meowPressScale(interactionSource = interaction, pressedScale = 0.97f)
             .clip(shape)
             .then(fill)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = indication,
+                enabled = enabled,
+                onClick = onClick,
+            )
             .padding(horizontal = 22.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -74,11 +86,19 @@ fun MeowOutlinedButton(
     icon: ImageVector? = null,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val indication = LocalIndication.current
     Row(
         modifier = modifier
             .clip(CircleShape)
+            .meowPressScale(interactionSource = interaction, pressedScale = 0.97f)
             .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = indication,
+                enabled = enabled,
+                onClick = onClick,
+            )
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -102,13 +122,19 @@ fun MeowTextButton(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = color,
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick)
+            .meowPressScale(interactionSource = interaction, pressedScale = 0.96f)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            )
             .padding(horizontal = 10.dp, vertical = 6.dp),
     )
 }
@@ -123,12 +149,18 @@ fun MeowIconButton(
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     tint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
             .size(40.dp)
             .clip(CircleShape)
+            .meowPressScale(interactionSource = interaction, pressedScale = 0.92f)
             .background(containerColor)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {

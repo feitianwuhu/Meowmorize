@@ -1,7 +1,16 @@
 package com.meowmorize.core.designsystem.component
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +36,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -38,6 +50,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowPressScale
+import com.meowmorize.core.designsystem.motion.meowTween
+import com.meowmorize.core.designsystem.motion.motionMs
+import kotlinx.coroutines.delay
 import com.meowmorize.core.designsystem.theme.LocalAppStyle
 import com.meowmorize.core.model.AppStyle
 
@@ -84,13 +101,16 @@ fun MeowBottomBar(
         ) {
             items.forEach { item ->
                 val selected = item.route == currentRoute
+                val interaction = remember { MutableInteractionSource() }
+
+                // 底栏一天要被点几十次：颜色过渡压到 150ms，只求「跟手」不求好看
                 val container by animateColorAsState(
                     targetValue = if (selected) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                     } else {
                         Color.Transparent
                     },
-                    animationSpec = tween(220),
+                    animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
                     label = "navContainer",
                 )
                 val tint by animateColorAsState(
@@ -99,14 +119,18 @@ fun MeowBottomBar(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    animationSpec = tween(220),
+                    animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
                     label = "navTint",
                 )
                 Row(
                     modifier = Modifier
+                        .meowPressScale(interactionSource = interaction, pressedScale = 0.95f)
                         .clip(RoundedCornerShape(18.dp))
                         .background(container)
-                        .clickable { onSelect(item.route) }
+                        .clickable(
+                            interactionSource = interaction,
+                            indication = LocalIndication.current,
+                        ) { onSelect(item.route) }
                         .padding(horizontal = 16.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -116,13 +140,28 @@ fun MeowBottomBar(
                         tint = tint,
                         modifier = Modifier.size(21.dp),
                     )
-                    if (selected) {
-                        Spacer(Modifier.width(7.dp))
-                        Text(
-                            text = item.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = tint,
-                        )
+                    // 文字展开而不是「突然出现」：胶囊宽度变化才有连续感
+                    AnimatedVisibility(
+                        visible = selected,
+                        enter = fadeIn(meowTween(MeowMotion.FAST)) +
+                            expandHorizontally(
+                                animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+                                expandFrom = Alignment.Start,
+                            ),
+                        exit = fadeOut(meowTween(MeowMotion.PRESS)) +
+                            shrinkHorizontally(
+                                animationSpec = meowTween(MeowMotion.PRESS, MeowMotion.easeOut),
+                                shrinkTowards = Alignment.Start,
+                            ),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.width(7.dp))
+                            Text(
+                                text = item.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = tint,
+                            )
+                        }
                     }
                 }
             }
@@ -144,7 +183,19 @@ fun MeowBottomSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    if (!visible) return
+    // 关闭瞬间不能立刻移除 Dialog，否则没有宿主承载退场动画
+    var present by remember { mutableStateOf(visible) }
+    val sheetMs = motionMs(MeowMotion.SHEET)
+    LaunchedEffect(visible) {
+        if (visible) {
+            present = true
+        } else if (present) {
+            delay((sheetMs + 40).toLong())
+            present = false
+        }
+    }
+    if (!present) return
+
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(
@@ -153,49 +204,68 @@ fun MeowBottomSheet(
             dismissOnBackPress = true,
         ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismissRequest,
-                ),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            Surface(
-                modifier = modifier
-                    .fillMaxWidth()
+        val scrim by animateFloatAsState(
+            targetValue = if (visible) 0.45f else 0f,
+            animationSpec = meowTween(MeowMotion.SHEET, MeowMotion.easeOut),
+            label = "sheetScrim",
+        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = scrim))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = {},
+                        onClick = onDismissRequest,
                     ),
-                shape = if (LocalAppStyle.current == AppStyle.TERMINAL) {
-                    RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
-                } else {
-                    RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
-                },
-                color = MaterialTheme.colorScheme.surface,
+            )
+            AnimatedVisibility(
+                visible = visible,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                // 上滑用抽屉曲线，退下更快：进入要「被托起来」，退出要「立刻让开」
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = meowTween(MeowMotion.SHEET, MeowMotion.drawer),
+                ) + fadeIn(meowTween(MeowMotion.BASE)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = meowTween(MeowMotion.BASE, MeowMotion.easeOut),
+                ) + fadeOut(meowTween(MeowMotion.FAST)),
             ) {
-                Column(
-                    modifier = Modifier
+                Surface(
+                    modifier = modifier
                         .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(horizontal = 22.dp)
-                        .padding(top = 12.dp, bottom = 20.dp),
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        ),
+                    shape = if (LocalAppStyle.current == AppStyle.TERMINAL) {
+                        RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
+                    } else {
+                        RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
+                    },
+                    color = MaterialTheme.colorScheme.surface,
                 ) {
-                    Box(
+                    Column(
                         modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .width(40.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(MaterialTheme.colorScheme.outline),
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    content()
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(horizontal = 22.dp)
+                            .padding(top = 12.dp, bottom = 20.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .width(40.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(MaterialTheme.colorScheme.outline),
+                        )
+                        Spacer(Modifier.height(18.dp))
+                        content()
+                    }
                 }
             }
         }
