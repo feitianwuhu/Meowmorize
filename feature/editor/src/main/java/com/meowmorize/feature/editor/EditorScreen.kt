@@ -130,7 +130,6 @@ fun EditorRoute(
         onNewSubject = viewModel::openNewSubjectDialog,
         onHintChange = viewModel::setHint,
         onDeadlineChange = viewModel::setDeadline,
-        onClozeEnabledChange = viewModel::setClozeEnabled,
         onClozeAnswerChange = viewModel::setClozeAnswer,
         onDelete = viewModel::delete,
         onContentFormatChange = viewModel::setContentFormat,
@@ -194,7 +193,6 @@ fun EditorScreen(
     onNewSubject: () -> Unit,
     onHintChange: (String) -> Unit,
     onDeadlineChange: (java.time.Instant?) -> Unit,
-    onClozeEnabledChange: (Boolean) -> Unit,
     onClozeAnswerChange: (String) -> Unit,
     onDelete: () -> Unit,
     onContentFormatChange: (ContentFormat) -> Unit,
@@ -335,18 +333,12 @@ fun EditorScreen(
                         text = if (state.contentFormat == ContentFormat.MARKDOWN) {
                             "Markdown：标题 / 列表 / 两栏对照，复习时渲染后可读性更好"
                         } else {
-                            "纯文本，复习时会先遮住，让你先回忆"
+                            "复习时先展示这一段，答案另外隐藏"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                MeowChip(
-                    text = if (state.clozeEnabled) "填空题" else "转填空",
-                    selected = state.clozeEnabled,
-                    onClick = { onClozeEnabledChange(!state.clozeEnabled) },
-                )
-                Spacer(Modifier.size(8.dp))
                 MeowChip(
                     text = if (state.contentFormat == ContentFormat.MARKDOWN) "高级已开" else "高级",
                     selected = state.contentFormat == ContentFormat.MARKDOWN,
@@ -413,29 +405,20 @@ fun EditorScreen(
                 )
             }
 
-            // 展开/收起用高度动画：手风琴是「动画高度」的正当例外，
-            // 这一块很短，代价可以接受
-            AnimatedVisibility(
-                visible = state.clozeEnabled,
-                enter = fadeIn(meowTween(MeowMotion.BASE)) +
-                    expandVertically(animationSpec = meowTween(MeowMotion.ENTER, MeowMotion.easeOut)),
-                exit = fadeOut(meowTween(MeowMotion.FAST)) +
-                    shrinkVertically(animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut)),
-            ) {
-                Column {
-                    Spacer(Modifier.height(12.dp))
-                    MeowTextField(
-                        value = state.clozeAnswer,
-                        onValueChange = onClozeAnswerChange,
-                        label = "答案",
-                        placeholder = "例：突发性、破坏性、广泛性、不确定性",
-                        singleLine = false,
-                        minLines = 2,
-                        maxLines = 5,
-                        supportingText = "题干里用 ______ 表示要填的位置；复习时题干可见，答案点「显示答案」才出现",
-                    )
-                }
-            }
+            // 答案不再是「填空专属」：每条任务都有这一栏，留空则复习时
+            // 按「先回忆、再显示内容」处理
+            Spacer(Modifier.height(14.dp))
+            MeowTextField(
+                value = state.clozeAnswer,
+                onValueChange = onClozeAnswerChange,
+                label = "答案",
+                placeholder = "例：突发性、破坏性、广泛性、不确定性",
+                singleLine = false,
+                minLines = 2,
+                maxLines = 5,
+                supportingText = "复习时先展示「背诵内容」，答案默认隐藏，点「显示答案」才出现。" +
+                    "留空则按「先回忆、再显示内容」处理",
+            )
 
             Spacer(Modifier.height(10.dp))
             Row(

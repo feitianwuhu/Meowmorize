@@ -38,7 +38,6 @@ data class EditorUiState(
     /** 截止时间（考试/汇报），为空表示没有期限。 */
     val deadlineAt: Instant? = null,
     /** 是否按「题干 + 答案」的填空题处理。 */
-    val clozeEnabled: Boolean = false,
     /** 填空题答案。 */
     val clozeAnswer: String = "",
     val priority: Priority = Priority.NORMAL,
@@ -124,7 +123,6 @@ class EditorViewModel @Inject constructor(
                 hint = item.hint.orEmpty(),
                 contentFormat = item.contentFormat,
                 deadlineAt = item.deadlineAt,
-                clozeEnabled = item.clozeAnswer != null,
                 clozeAnswer = item.clozeAnswer.orEmpty(),
                 priority = item.priority,
                 estimatedMinutes = item.estimatedMinutes,
@@ -158,17 +156,6 @@ class EditorViewModel @Inject constructor(
 
     fun setDeadline(value: Instant?) {
         _uiState.update { it.copy(deadlineAt = value) }
-    }
-
-    /**
-     * 切换填空题模式。
-     *
-     * 只切开关，**不改动正文**。之前会在题干末尾自动补 `______`，
-     * 但空位本来就可能出现在句子中间，自动补的那个反而要用户手动删掉；
-     * 题干怎么写应该由用户决定。
-     */
-    fun setClozeEnabled(enabled: Boolean) {
-        _uiState.update { it.copy(clozeEnabled = enabled) }
     }
 
     fun setClozeAnswer(value: String) {
@@ -345,7 +332,7 @@ class EditorViewModel @Inject constructor(
                             hint = state.hint.takeIf { it.isNotBlank() },
                             contentFormat = state.contentFormat,
                             deadlineAt = state.deadlineAt,
-                            clozeAnswer = if (state.clozeEnabled) state.clozeAnswer.trim() else null,
+                            clozeAnswer = state.clozeAnswer.trim().ifBlank { null },
                         ),
                     )
                 } else {
@@ -361,7 +348,7 @@ class EditorViewModel @Inject constructor(
                             hint = state.hint.trim().takeIf { it.isNotBlank() },
                             contentFormat = state.contentFormat,
                             deadlineAt = state.deadlineAt,
-                            clozeAnswer = if (state.clozeEnabled) state.clozeAnswer.trim() else null,
+                            clozeAnswer = state.clozeAnswer.trim().ifBlank { null },
                         ),
                         policy = if (state.resetSchedule) {
                             ScheduleUpdatePolicy.RESET_SCHEDULE

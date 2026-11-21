@@ -63,6 +63,7 @@ import com.meowmorize.core.designsystem.component.SubjectLabel
 import com.meowmorize.core.designsystem.theme.LocalMeowColors
 import com.meowmorize.core.designsystem.theme.displayName
 import com.meowmorize.core.model.ContentFormat
+import com.meowmorize.core.model.MemorizeItem
 import com.meowmorize.core.model.RecallGrade
 import kotlinx.coroutines.delay
 
@@ -187,106 +188,85 @@ fun ReviewScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // 两个显式动作：看答案、看提示。提示是「降低难度」，所以会记入本次复习。
-            // 填空题的「显示答案」放在卡片里、紧贴答案位置，这里不再重复放一个：
-            // 同一屏出现两个一模一样的按钮，用户只会以为点错了。
-            val showRevealChip = item.clozeAnswer == null
-            if (showRevealChip || hasHint) {
+            // 这里只留「提示」。「显示答案 / 显示内容」统一放到下面的卡片里——
+            // 之前顶部和卡片各放一个，同一屏会出现两个一模一样的按钮。
+            if (hasHint) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (showRevealChip) {
-                        MeowChip(
-                            text = if (state.revealed) "内容已显示" else "显示内容",
-                            selected = state.revealed,
-                            onClick = onReveal,
-                        )
-                    }
-                    if (hasHint) {
-                        MeowChip(
-                            text = if (state.hintVisible) "隐藏提示" else "显示提示",
-                            selected = state.hintVisible,
-                            onClick = if (state.hintVisible) onHideHint else onShowHint,
-                        )
-                    }
+                    MeowChip(
+                        text = if (state.hintVisible) "隐藏提示" else "显示提示",
+                        selected = state.hintVisible,
+                        onClick = if (state.hintVisible) onHideHint else onShowHint,
+                    )
                 }
             }
 
             Spacer(Modifier.height(12.dp))
-            val answer = item.clozeAnswer
+            // 答案一律可有可无：
+            // · 填了答案 → 先看「背诵内容」，答案待揭
+            // · 没填答案（老数据 / 纯记忆内容）→ 先回忆，再揭内容
+            val answer = item.clozeAnswer?.takeIf { it.isNotBlank() }
+            val revealIn = meowTween<Float>(MeowMotion.BASE)
+            val revealOut = meowTween<Float>(MeowMotion.FAST)
             MeowCard {
                 if (answer != null) {
-                    // 填空题：题干始终可见，答案才需要「显示答案」。这才符合考试时的情境。
-                    if (item.contentFormat == ContentFormat.MARKDOWN) {
-                        MarkdownText(markdown = item.content.ifBlank { "这条任务还没有填写题干。" })
-                    } else {
-                        Text(
-                            text = item.content.ifBlank { "这条任务还没有填写题干。" },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                    ItemContent(item = item, emptyHint = "这条任务还没有填写背诵内容。")
                     Spacer(Modifier.height(12.dp))
-                    // 揭示答案是这个页面最核心的一次状态变化：从「一枚按钮」变成
-                    // 「一段答案」，硬切会像页面闪了一下。用 AnimatedContent 让高度
-                    // 与内容一起过渡——尺寸动画在这里是必要的，不是装饰。
-                    // transitionSpec 的 lambda 不是 @Composable，规格只能在外面算好
-                    val revealIn = meowTween<Float>(MeowMotion.BASE)
-                    val revealOut = meowTween<Float>(MeowMotion.FAST)
                     AnimatedContent(
                         targetState = state.revealed,
                         transitionSpec = { fadeIn(revealIn) togetherWith fadeOut(revealOut) },
                         label = "answerReveal",
                     ) { revealed ->
-                    if (revealed) {
-                        Column {
-                            MeowDivider()
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                text = "答案",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = answer.ifBlank { "（没有填写答案）" },
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                        if (revealed) {
+                            Column {
+                                MeowDivider()
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    text = "答案",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Text(
+                                    text = answer,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        } else {
+                            MeowChip(text = "显示答案", onClick = onReveal, selected = false)
                         }
-                    } else {
-                        MeowChip(text = "显示答案", onClick = onReveal, selected = false)
-                    }
-                    }
-                } else if (state.revealed) {
-                    if (item.contentFormat == ContentFormat.MARKDOWN) {
-                        MarkdownText(markdown = item.content.ifBlank { "这条任务还没有填写内容。" })
-                    } else {
-                        Text(
-                            text = item.content.ifBlank { "这条任务还没有填写内容。" },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
                     }
                 } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = "先在心里过一遍",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = if (hasHint) {
-                                "想不起来可以看提示，但用过提示就不能选「轻松」。"
-                            } else {
-                                "想不起来也没关系，点开对照才是记忆真正发生的时候。"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(18.dp))
-                        MeowChip(text = "显示内容", onClick = onReveal, selected = false)
+                    AnimatedContent(
+                        targetState = state.revealed,
+                        transitionSpec = { fadeIn(revealIn) togetherWith fadeOut(revealOut) },
+                        label = "contentReveal",
+                    ) { revealed ->
+                        if (revealed) {
+                            ItemContent(item = item, emptyHint = "这条任务还没有填写内容。")
+                        } else {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    text = "先在心里过一遍",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = if (hasHint) {
+                                        "想不起来可以看提示，但用过提示就不能选「轻松」。"
+                                    } else {
+                                        "想不起来也没关系，点开对照才是记忆真正发生的时候。"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(18.dp))
+                                MeowChip(text = "显示内容", onClick = onReveal, selected = false)
+                            }
+                        }
                     }
                 }
             }
@@ -505,5 +485,20 @@ private fun GradeBar(
                 }
             }
         }
+    }
+}
+
+/** 背诵内容的渲染（纯文本 / Markdown 两种），填空题与普通内容共用。 */
+@Composable
+private fun ItemContent(item: MemorizeItem, emptyHint: String) {
+    val text = item.content.ifBlank { emptyHint }
+    if (item.contentFormat == ContentFormat.MARKDOWN) {
+        MarkdownText(markdown = text)
+    } else {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }

@@ -72,9 +72,11 @@ data class MemorizeItem(
      */
     val deadlineAt: Instant? = null,
     /**
-     * 填空题答案。非 null 表示这条内容按「题干 + 答案」处理：
-     * [content] 是题干（例如「第二次世界大战的特点为 ______」），
-     * 复习时题干直接可见，答案要点「显示答案」才出现。
+     * 答案（可空，字段名沿用历史的 `clozeAnswer`）。
+     *
+     * 编辑页固定给「背诵内容 + 答案」两栏，不再有「是不是填空题」的区别：
+     * - 有答案：[content] 是提示面，复习时直接可见；答案要点「显示答案」才出现
+     * - 无答案：复习时先把 [content] 遮住，点「显示内容」再对照
      */
     val clozeAnswer: String? = null,
 ) {
@@ -106,7 +108,7 @@ data class ItemDraft(
     val contentFormat: ContentFormat = ContentFormat.PLAIN,
     /** 背诵截止时间（考试/汇报），为空表示没有期限。 */
     val deadlineAt: Instant? = null,
-    /** 填空题答案；null 表示普通内容。 */
+    /** 答案；为空表示这条只有内容、没有需要单独揭晓的答案。 */
     val clozeAnswer: String? = null,
 )
 
