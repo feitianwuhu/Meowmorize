@@ -77,6 +77,7 @@ fun MeowBottomBar(
     modifier: Modifier = Modifier,
 ) {
     val terminal = LocalAppStyle.current == AppStyle.TERMINAL
+    val glass = LocalAppStyle.current == AppStyle.GLASS
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -88,8 +89,9 @@ fun MeowBottomBar(
             1.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = if (terminal) 1f else 0.8f),
         ),
-        // 终端风格不用投影：层次靠 1px 描边
-        shadowElevation = if (terminal) 0.dp else 14.dp,
+        // 终端与玻璃风格都不投影：终端靠 1px 描边，玻璃靠亮边——
+        // 半透明面上压一层厚投影只会糊成一团
+        shadowElevation = if (terminal || glass) 0.dp else 14.dp,
     ) {
         Row(
             modifier = Modifier

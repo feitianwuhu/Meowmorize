@@ -662,7 +662,13 @@ fun EditorScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
+                .background(
+                    if (LocalAppStyle.current == AppStyle.GLASS) {
+                        MaterialTheme.colorScheme.surface
+                    } else {
+                        MaterialTheme.colorScheme.background
+                    },
+                )
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 14.dp),
         ) {

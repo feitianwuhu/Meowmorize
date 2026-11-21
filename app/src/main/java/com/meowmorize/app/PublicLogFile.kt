@@ -19,7 +19,6 @@ import android.provider.MediaStore
 internal object PublicLogFile {
 
     fun publish(context: Context, displayName: String, content: String) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         runCatching {
             val resolver = context.contentResolver
             val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI

@@ -330,8 +330,10 @@ class SettingsViewModel @Inject constructor(
                 return@launch
             }
             wallpaperState.value = wallpaperState.value.copy(busy = true)
-            val meta = runCatching { wallpaperRepository.today() }.getOrNull()
+            // ensureDownloaded 内部已经会取元数据，不必先单独 today() 再下一遍
             val downloaded = runCatching { wallpaperRepository.ensureDownloaded() }.getOrNull()
+            val meta = downloaded?.first
+                ?: runCatching { wallpaperRepository.today() }.getOrNull()
             wallpaperState.value = WallpaperUiState(
                 meta = meta,
                 file = downloaded?.second,

@@ -106,9 +106,10 @@ class MainActivity : ComponentActivity() {
                     androidx.compose.foundation.layout.Box(
                         modifier = androidx.compose.ui.Modifier.fillMaxSize(),
                     ) {
-                        // 壁纸只在磨砂风格下出现；其它风格的 background 是不透明色。
-                        // 先铺一层中性底色：壁纸还在下载时也不会闪白。
-                        if (appearance.style == AppStyle.GLASS && appearance.wallpaperEnabled) {
+                        // 磨砂风格的 background 是透明的，必须自己铺底：
+                        // 不铺的话关掉壁纸后会变成「透明叠透明」，文字压到窗口底色上。
+                        // 底色与「是否使用壁纸」解耦——有壁纸时它顺便兼作加载中的兜底。
+                        if (appearance.style == AppStyle.GLASS) {
                             androidx.compose.foundation.layout.Box(
                                 modifier = androidx.compose.ui.Modifier
                                     .fillMaxSize()
@@ -120,11 +121,19 @@ class MainActivity : ComponentActivity() {
                                         },
                                     ),
                             )
+                        }
+                        if (appearance.style == AppStyle.GLASS && appearance.wallpaperEnabled) {
                             WallpaperBackdrop(
                                 file = appearance.wallpaperFile,
                                 scale = appearance.wallpaperScale,
                                 blurDp = appearance.wallpaperBlur,
                                 scrim = appearance.wallpaperScrim.toFloat(),
+                                // 亮磨砂压白、暗磨砂压黑：否则深色文字压在暗遮罩上会糊成一团
+                                scrimColor = if (glassDark) {
+                                    androidx.compose.ui.graphics.Color.Black
+                                } else {
+                                    androidx.compose.ui.graphics.Color.White
+                                },
                             )
                         }
                         MeowmorizeApp()

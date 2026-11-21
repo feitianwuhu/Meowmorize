@@ -68,6 +68,7 @@ fun MeowTextField(
     imeAction: ImeAction = ImeAction.Next,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
+        // 输入框本来就用 surface 做底衬，玻璃风格下半透明底正好压在照片上不糊
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,

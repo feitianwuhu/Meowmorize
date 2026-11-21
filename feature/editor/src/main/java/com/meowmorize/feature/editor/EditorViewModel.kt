@@ -323,8 +323,8 @@ class EditorViewModel @Inject constructor(
                     saveItem.create(
                         ItemDraft(
                             subjectId = state.subjectId,
-                            topic = state.topic,
-                            content = state.content,
+                            topic = state.topic.trim(),
+                            content = state.content.trim(),
                             source = state.source.takeIf { it.isNotBlank() },
                             priority = state.priority,
                             estimatedMinutes = state.estimatedMinutes,

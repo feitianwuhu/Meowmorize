@@ -41,6 +41,9 @@ import androidx.compose.foundation.border
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -735,15 +738,21 @@ internal object SettingsSummary {
         "最长 ${if (settings.maxIntervalDays >= 365) "1 年" else "${settings.maxIntervalDays} 天"} · " +
             "反复遗忘 ${settings.leechThreshold} 次"
 
-    fun appearance(settings: UserSettings): String = if (settings.appStyle == AppStyle.TERMINAL) {
-        "终端 · 固定深色"
-    } else {
-        val theme = when (settings.themeMode) {
-            ThemeMode.SYSTEM -> "跟随系统"
-            ThemeMode.LIGHT -> "浅色"
-            ThemeMode.DARK -> "深色"
+    fun appearance(settings: UserSettings): String = when (settings.appStyle) {
+        AppStyle.TERMINAL -> "终端 · 固定深色"
+        AppStyle.GLASS -> when (settings.glassTone) {
+            GlassTone.LIGHT -> "磨砂 · 亮"
+            GlassTone.DARK -> "磨砂 · 暗"
+            GlassTone.SYSTEM -> "磨砂 · 跟随系统"
         }
-        "$theme · 柔角卡片"
+        AppStyle.SOFT_CARD -> {
+            val theme = when (settings.themeMode) {
+                ThemeMode.SYSTEM -> "跟随系统"
+                ThemeMode.LIGHT -> "浅色"
+                ThemeMode.DARK -> "深色"
+            }
+            "$theme · 柔角卡片"
+        }
     }
 
     fun wallpaper(settings: UserSettings): String = if (!settings.wallpaperEnabled) {
@@ -970,13 +979,27 @@ private fun AccentSwatch(
 /** 壁纸预览：直接解码本地缓存图，尺寸不大（≤2200px），一张 8MB 左右可接受。 */
 @Composable
 private fun WallpaperPreview(file: java.io.File?) {
-    val painter = remember(file?.path, file?.lastModified()) {
-        file?.let { target ->
-            runCatching {
-                android.graphics.BitmapFactory.decodeFile(target.path)
-                    ?.asImageBitmap()
-                    ?.let { BitmapPainter(it) }
-            }.getOrNull()
+    // 预览也要异步 + 降采样：原图 8MB，直接解码会明显卡一下
+    val painter by produceState<BitmapPainter?>(
+        initialValue = null,
+        file?.path,
+        file?.lastModified(),
+    ) {
+        value = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            file?.let { target ->
+                runCatching {
+                    val bounds = android.graphics.BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    android.graphics.BitmapFactory.decodeFile(target.path, bounds)
+                    var sample = 1
+                    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 900) sample *= 2
+                    android.graphics.BitmapFactory.decodeFile(
+                        target.path,
+                        android.graphics.BitmapFactory.Options().apply { inSampleSize = sample },
+                    )?.asImageBitmap()?.let { BitmapPainter(it) }
+                }.getOrNull()
+            }
         }
     }
     Box(
@@ -987,9 +1010,10 @@ private fun WallpaperPreview(file: java.io.File?) {
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        if (painter != null) {
+        val ready = painter
+        if (ready != null) {
             Image(
-                painter = painter,
+                painter = ready,
                 contentDescription = "今日壁纸预览",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

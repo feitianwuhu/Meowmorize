@@ -6,6 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -32,29 +36,26 @@ fun WallpaperBackdrop(
     scale: WallpaperScale,
     blurDp: Int,
     scrim: Float,
+    /** 遮罩颜色：暗磨砂压黑（提亮文字），亮磨砂压白（压暗文字）。 */
+    scrimColor: Color = Color.Black,
     modifier: Modifier = Modifier,
 ) {
     if (file == null || !file.exists()) return
 
-    // 解码一次就缓存：每次重组都解码一张 2K 图会明显卡顿
-    val painter = remember(file.path, file.lastModified()) {
-        runCatching {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(file.path, bounds)
-            val longest = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
-            var sample = 1
-            while (longest / sample > 2200) sample *= 2
-            val bitmap = BitmapFactory.decodeFile(
-                file.path,
-                BitmapFactory.Options().apply { inSampleSize = sample },
-            )
-            bitmap?.let { BitmapPainter(it.asImageBitmap()) }
-        }.getOrNull()
-    } ?: return
+    // 解码放到 IO 线程：一张 2K 图在主线程解码要几十毫秒，正好卡在首帧上。
+    // 用 produceState 而不是 remember：remember 里做 IO 等于把耗时塞进组合。
+    val painter by produceState<BitmapPainter?>(
+        initialValue = null,
+        file.path,
+        file.lastModified(),
+    ) {
+        value = withContext(Dispatchers.IO) { decodeWallpaper(file) }
+    }
+    val ready = painter ?: return
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         Image(
-            painter = painter,
+            painter = ready,
             contentDescription = null,
             contentScale = when (scale) {
                 WallpaperScale.FILL -> ContentScale.Crop
@@ -70,8 +71,22 @@ fun WallpaperBackdrop(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = scrim.coerceIn(0f, 0.8f))),
+                    .background(scrimColor.copy(alpha = scrim.coerceIn(0f, 0.8f))),
             )
         }
     }
 }
+
+
+/** 按目标尺寸降采样解码，避免 4K 原图吃内存。 */
+private fun decodeWallpaper(file: File): BitmapPainter? = runCatching {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.path, bounds)
+    val longest = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
+    var sample = 1
+    while (longest / sample > 2200) sample *= 2
+    BitmapFactory.decodeFile(
+        file.path,
+        BitmapFactory.Options().apply { inSampleSize = sample },
+    )?.let { BitmapPainter(it.asImageBitmap()) }
+}.getOrNull()

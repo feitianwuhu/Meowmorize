@@ -54,6 +54,8 @@ import com.meowmorize.core.designsystem.component.MarkdownText
 import com.meowmorize.core.designsystem.motion.MeowMotion
 import com.meowmorize.core.designsystem.motion.meowPressScale
 import com.meowmorize.core.designsystem.motion.meowTween
+import com.meowmorize.core.designsystem.theme.LocalAppStyle
+import com.meowmorize.core.model.AppStyle
 import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
 import com.meowmorize.core.designsystem.component.MeowDivider
@@ -391,7 +393,15 @@ private fun GradeBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            // 玻璃风格下 background 是透明的，底部操作条会直接压在照片上；
+            // 这种「承载按钮的条」必须用 surface（半透明玻璃）而不是 background
+            .background(
+                if (LocalAppStyle.current == AppStyle.GLASS) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
+            )
             .navigationBarsPadding()
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
