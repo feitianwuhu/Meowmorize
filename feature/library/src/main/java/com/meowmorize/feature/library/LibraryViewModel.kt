@@ -68,6 +68,10 @@ class LibraryViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val filters = MutableStateFlow(Filters())
+
+    /** 多选集合。空集 = 未进入多选模式。 */
+    private val _selection = MutableStateFlow<Set<Long>>(emptySet())
+    val selection: StateFlow<Set<Long>> = _selection
     private val message = MutableStateFlow<String?>(null)
 
     private data class LocalState(
@@ -244,6 +248,78 @@ class LibraryViewModel @Inject constructor(
 
     private fun itemsOfSubject(subjectId: Long): Int =
         uiState.value.items.count { it.item.subjectId == subjectId }
+
+    // ---------- 多选与批量编辑 ----------
+
+    fun toggleSelection(id: Long) {
+        val current = _selection.value
+        _selection.value = if (id in current) current - id else current + id
+    }
+
+    fun clearSelection() {
+        _selection.value = emptySet()
+    }
+
+    fun selectAll() {
+        _selection.value = uiState.value.items.map { it.item.id }.toSet()
+    }
+
+    fun archiveSelected() = batch {
+        _selection.value.forEach { studyRepository.archiveItem(it) }
+        "已归档 ${_selection.value.size} 条"
+    }
+
+    fun restoreSelected() = batch {
+        _selection.value.forEach { studyRepository.restoreItem(it) }
+        "已恢复 ${_selection.value.size} 条"
+    }
+
+    fun deleteSelected() = batch {
+        val count = _selection.value.size
+        _selection.value.forEach { studyRepository.deleteItem(it) }
+        "已删除 $count 条"
+    }
+
+    /** 移动到某个学科；`subjectId = null` 表示移出学科（未分类）。 */
+    fun moveSelectedToSubject(subjectId: Long?) = batch {
+        val targets = uiState.value.items.filter { it.item.id in _selection.value }
+        targets.forEach { entry ->
+            studyRepository.updateItem(
+                entry.item.copy(subjectId = subjectId),
+                com.meowmorize.core.model.ScheduleUpdatePolicy.KEEP_SCHEDULE,
+            )
+        }
+        "已移动 ${targets.size} 条"
+    }
+
+    fun setSelectedPriority(priority: com.meowmorize.core.model.Priority) = batch {
+        val targets = uiState.value.items.filter { it.item.id in _selection.value }
+        targets.forEach { entry ->
+            studyRepository.updateItem(
+                entry.item.copy(priority = priority),
+                com.meowmorize.core.model.ScheduleUpdatePolicy.KEEP_SCHEDULE,
+            )
+        }
+        "已设为「${
+            when (priority) {
+                com.meowmorize.core.model.Priority.LOW -> "低"
+                com.meowmorize.core.model.Priority.NORMAL -> "普通"
+                com.meowmorize.core.model.Priority.HIGH -> "高"
+            }
+        }」"
+    }
+
+    /** 批量操作统一收口：串行执行、结束后清空选择、失败给一条消息。 */
+    private fun batch(block: suspend () -> String) {
+        viewModelScope.launch {
+            runCatching { block() }
+                .onSuccess { result ->
+                    _selection.value = emptySet()
+                    message.value = result
+                }
+                .onFailure { message.value = "批量操作失败：${it.message ?: "未知原因"}" }
+        }
+    }
 
     fun dismissMessage() {
         message.value = null

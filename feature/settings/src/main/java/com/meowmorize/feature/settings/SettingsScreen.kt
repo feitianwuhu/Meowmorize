@@ -262,6 +262,8 @@ private fun SettingsHome(
                     GroupRow(SettingsGroup.UPDATE, SettingsSummary.update(state), onOpenGroup)
                     MeowDivider()
                     GroupRow(SettingsGroup.ADVANCED, SettingsSummary.advanced(state), onOpenGroup)
+                    MeowDivider()
+                    GroupRow(SettingsGroup.DATA, SettingsSummary.data(state), onOpenGroup)
                 }
             }
 
@@ -402,6 +404,11 @@ private val ALL_HITS: List<SettingHit> = listOf(
 
     SettingHit("检查更新", SettingsGroup.UPDATE),
     SettingHit("启动时检查更新", SettingsGroup.UPDATE),
+
+    SettingHit("备份", SettingsGroup.DATA),
+    SettingHit("导出", SettingsGroup.DATA),
+    SettingHit("导入", SettingsGroup.DATA),
+    SettingHit("mmr", SettingsGroup.DATA),
 
     SettingHit("时间快进", SettingsGroup.ADVANCED),
     SettingHit("选择日期与时间", SettingsGroup.ADVANCED),

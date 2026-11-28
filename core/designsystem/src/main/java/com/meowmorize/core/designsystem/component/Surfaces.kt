@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,8 @@ import com.meowmorize.core.model.AppStyle
 fun MeowCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    /** 长按回调（例如任务库进入多选）。为 null 时不监听长按。 */
+    onLongClick: (() -> Unit)? = null,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     borderColor: Color = MaterialTheme.colorScheme.outline,
     shape: RoundedCornerShape = MaterialTheme.shapes.extraLarge as RoundedCornerShape,
@@ -71,10 +74,15 @@ fun MeowCard(
             .background(containerColor)
             .border(BorderStroke(1.dp, borderColor.copy(alpha = if (terminal) 1f else 0.7f)), shape)
             .then(
-                if (onClick != null) {
+                if (onClick != null || onLongClick != null) {
                     // 卡片本来就是 indication = null（去掉水波纹），
                     // 所以按压缩放是它唯一的反馈
-                    Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                    Modifier.combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        onLongClick = onLongClick,
+                        onClick = onClick ?: {},
+                    )
                 } else {
                     Modifier
                 },

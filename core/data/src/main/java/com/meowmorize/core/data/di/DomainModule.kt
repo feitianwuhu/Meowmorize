@@ -2,6 +2,8 @@ package com.meowmorize.core.data.di
 
 import com.meowmorize.core.common.time.TimeProvider
 import com.meowmorize.core.data.calendar.AndroidCalendarRepository
+import com.meowmorize.core.data.backup.MmrBackupRepository
+import com.meowmorize.core.domain.repository.BackupRepository
 import com.meowmorize.core.data.ocr.MlKitOcrRepository
 import com.meowmorize.core.data.repository.CalendarRepositoryImpl
 import com.meowmorize.core.data.repository.PlanRepositoryImpl
@@ -76,6 +78,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindWallpaperRepository(impl: BingWallpaperRepository): WallpaperRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBackupRepository(impl: MmrBackupRepository): BackupRepository
 
     /** 同一个实例同时提供「当前时间」与「时间快进」能力，保证两边看到的偏移一致。 */
     @Binds

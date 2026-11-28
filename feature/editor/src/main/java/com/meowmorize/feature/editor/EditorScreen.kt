@@ -52,10 +52,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +81,9 @@ import com.meowmorize.core.designsystem.component.MeowCard
 import com.meowmorize.core.designsystem.component.MeowChip
 import com.meowmorize.core.designsystem.component.MeowIconButton
 import com.meowmorize.core.designsystem.component.MeowOutlinedButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.meowmorize.core.designsystem.component.MeowPrimaryButton
 import com.meowmorize.core.designsystem.component.MeowSegmented
 import com.meowmorize.core.designsystem.component.MeowTextButton
@@ -102,12 +107,25 @@ fun EditorRoute(
     val clipboard = LocalClipboardManager.current
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
 
+    // 选图后先进「四点框选」，矫正完再送 OCR：
+    // 斜拍的书页不摊平，识别错字率会明显偏高
+    var cropSource by remember { mutableStateOf<String?>(null) }
+    var cropImage by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    val scope = rememberCoroutineScope()
+
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val uri = cameraUri
-        if (success && uri != null) viewModel.recognizeImage(uri.toString())
+        if (success && uri != null) cropSource = uri.toString()
     }
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { viewModel.recognizeImage(it.toString()) }
+        uri?.let { cropSource = it.toString() }
+    }
+
+    LaunchedEffect(cropSource) {
+        val source = cropSource ?: return@LaunchedEffect
+        cropImage = withContext(Dispatchers.IO) {
+            loadSampledBitmap(context, source)
+        }?.asImageBitmap()
     }
 
     LaunchedEffect(state.saved, state.archived, state.deleted) {
@@ -151,6 +169,34 @@ fun EditorRoute(
         },
         onDismissOcrMessage = viewModel::dismissOcrMessage,
     )
+
+    cropImage?.let { bitmap ->
+        QuadCropDialog(
+            image = bitmap,
+            onDismiss = {
+                cropImage = null
+                cropSource = null
+            },
+            onConfirm = { warped ->
+                cropImage = null
+                cropSource = null
+                scope.launch {
+                    val file = withContext(Dispatchers.IO) {
+                        runCatching {
+                            java.io.File(context.cacheDir, "ocr_crop.jpg").apply {
+                                outputStream().use { out ->
+                                    warped.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
+                                }
+                            }
+                        }.getOrNull()
+                    }
+                    if (file != null) {
+                        viewModel.recognizeImage(Uri.fromFile(file).toString())
+                    }
+                }
+            },
+        )
+    }
 
     if (state.showNewSubjectDialog) {
         AlertDialog(

@@ -6,6 +6,8 @@ import com.meowmorize.core.common.time.TimeProvider
 import com.meowmorize.core.domain.repository.CalendarSyncRepository
 import com.meowmorize.core.domain.repository.CalendarSyncResult
 import com.meowmorize.core.domain.app.AppVersionProvider
+import com.meowmorize.core.domain.repository.BackupCounts
+import com.meowmorize.core.domain.repository.BackupRepository
 import com.meowmorize.core.domain.repository.DailyWallpaper
 import com.meowmorize.core.domain.repository.WallpaperRepository
 import com.meowmorize.core.model.AccentChoice
@@ -47,6 +49,7 @@ data class SettingsUiState(
     val message: String? = null,
     val update: UpdateUiState = UpdateUiState(),
     val wallpaper: WallpaperUiState = WallpaperUiState(),
+    val backup: BackupUiState = BackupUiState(),
 ) {
     val clockShifted: Boolean get() = clockOffsetMillis != 0L
 }
@@ -64,10 +67,22 @@ data class WallpaperUiState(
     val busy: Boolean = false,
 )
 
+enum class InstallStatus { IDLE, DOWNLOADING, READY, FAILED }
+
+/** 备份页状态：条数用于让用户确认「导的是不是这份数据」。 */
+data class BackupUiState(
+    val counts: BackupCounts = BackupCounts(),
+    val busy: Boolean = false,
+)
+
 data class UpdateUiState(
     val currentVersion: String = "",
     val checking: Boolean = false,
     val result: UpdateCheckResult? = null,
+    val installStatus: InstallStatus = InstallStatus.IDLE,
+    val installProgress: Float = 0f,
+    val installedFile: java.io.File? = null,
+    val installMessage: String? = null,
 )
 
 @HiltViewModel
@@ -81,7 +96,11 @@ class SettingsViewModel @Inject constructor(
     private val checkUpdate: CheckUpdateUseCase,
     private val appVersionProvider: AppVersionProvider,
     private val wallpaperRepository: WallpaperRepository,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    private val backupRepository: BackupRepository,
 ) : ViewModel() {
+
+    private val apkUpdate = com.meowmorize.feature.settings.update.ApkUpdateHelper(context)
 
     private data class LocalState(
         val isSyncing: Boolean = false,
@@ -95,6 +114,8 @@ class SettingsViewModel @Inject constructor(
 
     private val wallpaperState = MutableStateFlow(WallpaperUiState())
 
+    private val backupState = MutableStateFlow(BackupUiState())
+
     /** 每秒刷新一次虚拟时间，让「当前应用时间」是活的。 */
     private val clockTicker = flow {
         while (true) {
@@ -103,13 +124,23 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** combine 的具名重载最多 5 路，这里把三块「次要状态」并成一路。 */
+    private data class SideStates(
+        val update: UpdateUiState,
+        val wallpaper: WallpaperUiState,
+        val backup: BackupUiState,
+    )
+
+    private val sideStates = combine(updateState, wallpaperState, backupState) { update, wallpaper, backup ->
+        SideStates(update, wallpaper, backup)
+    }
+
     val uiState: StateFlow<SettingsUiState> = combine(
         settingsRepository.settings,
         clockTicker,
         local,
-        updateState,
-        wallpaperState,
-    ) { settings, now, mutation, update, wallpaper ->
+        sideStates,
+    ) { settings, now, mutation, side ->
         SettingsUiState(
             settings = settings,
             virtualNow = now,
@@ -117,8 +148,9 @@ class SettingsViewModel @Inject constructor(
             hasCalendarPermission = mutation.hasPermission,
             isSyncing = mutation.isSyncing,
             message = mutation.message,
-            update = update,
-            wallpaper = wallpaper,
+            update = side.update,
+            wallpaper = side.wallpaper,
+            backup = side.backup,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -381,6 +413,56 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    // ---------- 数据与备份 ----------
+
+    fun loadBackupCounts() {
+        viewModelScope.launch {
+            val counts = runCatching { backupRepository.counts() }.getOrNull() ?: return@launch
+            backupState.value = backupState.value.copy(counts = counts)
+        }
+    }
+
+    fun exportBackup(uriString: String) {
+        viewModelScope.launch {
+            backupState.value = backupState.value.copy(busy = true)
+            val result = runCatching { backupRepository.exportTo(uriString) }
+            backupState.value = backupState.value.copy(busy = false)
+            result
+                .onSuccess { counts ->
+                    backupState.value = backupState.value.copy(counts = counts)
+                    local.value = local.value.copy(
+                        message = "已导出 ${counts.subjects} 个学科 / ${counts.items} 条任务",
+                    )
+                }
+                .onFailure {
+                    local.value = local.value.copy(message = "导出失败：${it.message ?: "未知原因"}")
+                }
+        }
+    }
+
+    fun importBackup(uriString: String) {
+        viewModelScope.launch {
+            backupState.value = backupState.value.copy(busy = true)
+            val result = runCatching { backupRepository.importFrom(uriString) }
+            backupState.value = backupState.value.copy(busy = false)
+            result
+                .onSuccess { summary ->
+                    val counts = runCatching { backupRepository.counts() }.getOrNull()
+                    if (counts != null) backupState.value = backupState.value.copy(counts = counts)
+                    local.value = local.value.copy(
+                        message = buildString {
+                            append("已导入 ${summary.items} 条任务")
+                            if (summary.subjects > 0) append("、${summary.subjects} 个学科")
+                            if (summary.skipped > 0) append("；跳过 ${summary.skipped} 条重复")
+                        },
+                    )
+                }
+                .onFailure {
+                    local.value = local.value.copy(message = "导入失败：${it.message ?: "未知原因"}")
+                }
+        }
+    }
+
     // ---------- 检查更新 ----------
 
     /**
@@ -406,6 +488,73 @@ class SettingsViewModel @Inject constructor(
 
     /** 启动时自动检查的开关。只影响「查不查」，不影响「装不装」。 */
     fun setAutoCheckUpdate(enabled: Boolean) = persistOnly { it.copy(autoCheckUpdate = enabled) }
+
+    /**
+     * 应用内更新：下载 APK 并交由系统安装器。
+     *
+     * 相比「跳浏览器」，页内下载能给出明确的百分比与失败原因，也不会把用户丢出应用。
+     */
+    fun startUpdateDownload(url: String, versionName: String) {
+        if (updateState.value.installStatus == InstallStatus.DOWNLOADING) return
+        viewModelScope.launch {
+            updateState.value = updateState.value.copy(
+                installStatus = InstallStatus.DOWNLOADING,
+                installProgress = 0f,
+                installMessage = null,
+            )
+            var lastNotified = -1
+            val result = apkUpdate.download(url, versionName) { progress ->
+                updateState.value = updateState.value.copy(installProgress = progress)
+                // 每 5% 刷新一次通知，避免高频写通知栏
+                val percent = (progress * 100).toInt()
+                if (percent / 5 != lastNotified / 5) {
+                    lastNotified = percent
+                    apkUpdate.notifyProgress(progress, versionName)
+                }
+            }
+            result
+                .onSuccess { file ->
+                    apkUpdate.notifyReady(versionName)
+                    updateState.value = updateState.value.copy(
+                        installStatus = InstallStatus.READY,
+                        installProgress = 1f,
+                        installedFile = file,
+                        installMessage = null,
+                    )
+                }
+                .onFailure { error ->
+                    apkUpdate.clearNotification()
+                    updateState.value = updateState.value.copy(
+                        installStatus = InstallStatus.FAILED,
+                        installMessage = error.message ?: "下载失败",
+                    )
+                }
+        }
+    }
+
+    /** 唤起系统安装器；未授权「安装未知应用」时先跳授权页。 */
+    fun installDownloaded() {
+        val current = updateState.value
+        val file = current.installedFile ?: return
+        if (!apkUpdate.canInstall()) {
+            apkUpdate.openUnknownSourcesSettings()
+            updateState.value = current.copy(
+                installMessage = "请先允许 Meowmorize 安装应用，然后回来再点一次",
+            )
+            return
+        }
+        runCatching { apkUpdate.launchInstaller(file) }
+            .onFailure {
+                updateState.value = current.copy(
+                    installStatus = InstallStatus.FAILED,
+                    installMessage = "无法唤起系统安装器：${it.message ?: "未知原因"}",
+                )
+            }
+    }
+
+    fun openInstallerPermission() = apkUpdate.openUnknownSourcesSettings()
+
+    fun openDownloadInBrowser(url: String) = apkUpdate.openInBrowser(url)
 
     /** 只落盘，不触发今日计划重排——这类设置跟排程无关。 */
     private fun persistOnly(transform: (UserSettings) -> UserSettings) {

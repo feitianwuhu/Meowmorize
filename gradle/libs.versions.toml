@@ -10,7 +10,7 @@ lifecycle = "2.11.0"
 navigation = "2.10.2"
 coreKtx = "1.19.1"
 datastore = "1.3.0"
-mlkitText = "16.0.2"
+mlkitText = "16.0.1"
 hiltNavigationCompose = "1.4.0"
 coroutines = "1.11.0"
 kotlinxDatetime = "0.7.1"
@@ -35,7 +35,8 @@ androidx-datastore-preferences = { module = "androidx.datastore:datastore-prefer
 # 用「按需下载」的 GMS 版，而不是把 40MB 模型与原生库打进 APK：
 # 打包版会在进程启动时通过 MlKitInitProvider 加载原生库，在无 GMS / 部分国产 ROM 上
 # 表现为「点开就闪退」，且 Application 之前就崩，应用内无法兜底。
-mlkit-text-recognition-chinese = { module = "com.google.android.gms:play-services-mlkit-text-recognition-chinese", version.ref = "mlkitText" }
+# 自带模型版（bundled）：不依赖 Google Play 服务，国产无 GMS 设备也能用
+mlkit-text-recognition-chinese = { module = "com.google.mlkit:text-recognition-chinese", version.ref = "mlkitText" }
 
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }

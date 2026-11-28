@@ -2,8 +2,6 @@ package com.meowmorize.core.data.ocr
 
 import android.content.Context
 import android.net.Uri
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
@@ -23,9 +21,11 @@ import kotlin.coroutines.resumeWithException
 /**
  * ML Kit 端侧 OCR（中文 + 拉丁）。
  *
- * 现实约束：ML Kit 依赖 Google Play 服务，部分国产 ROM / 无 GMS 设备上不可用。
- * 所以这里只负责「能力上报 + 单次识别」，不可用时由界面引导用户走
- * 「相册取字后粘贴」的兜底路径，而不是让按钮静默失败。
+ * 用的是 **bundled（自带模型）** 版本，而不是 `play-services-mlkit-*` 瘦客户端：
+ * 后者要求设备装有 Google Play 服务，国产 ROM 上基本等于「功能不可用」。
+ * 自带模型版把识别模型打进 APK（约 20MB），完全离线，代价是包体积。
+ *
+ * 这个取舍是对的：OCR 的价值就在「不用手敲」，而恰恰是国内设备最需要它。
  */
 @Singleton
 class MlKitOcrRepository @Inject constructor(
@@ -36,22 +36,13 @@ class MlKitOcrRepository @Inject constructor(
         TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
     }
 
-    override fun availability(): OcrAvailability {
-        val status = GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context)
-        return when (status) {
-            ConnectionResult.SUCCESS -> OcrAvailability.READY
-            ConnectionResult.SERVICE_MISSING,
-            ConnectionResult.SERVICE_DISABLED,
-            ConnectionResult.SERVICE_INVALID,
-            -> OcrAvailability.PLAY_SERVICES_MISSING
-            else -> OcrAvailability.UNSUPPORTED
-        }
-    }
+    /**
+     * 自带模型版不依赖外部服务，恒为可用。
+     * 保留这个接口，是为了让上层不必区分「模型在包里」还是「模型在系统里」。
+     */
+    override fun availability(): OcrAvailability = OcrAvailability.READY
 
     override suspend fun recognize(uriString: String): OcrResult = withContext(Dispatchers.IO) {
-        if (availability() != OcrAvailability.READY) {
-            return@withContext OcrResult(error = OcrError.UNAVAILABLE)
-        }
         runCatching {
             val image = InputImage.fromFilePath(context, Uri.parse(uriString))
             val text = suspendCancellableCoroutine { continuation ->

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Weekend
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,6 +67,7 @@ import com.meowmorize.core.designsystem.component.MeowIconButton
 import com.meowmorize.core.designsystem.component.MeowOutlinedButton
 import com.meowmorize.core.designsystem.component.MeowPrimaryButton
 import com.meowmorize.core.designsystem.component.MeowSegmented
+import com.meowmorize.core.designsystem.component.MeowSettingRow
 import com.meowmorize.core.designsystem.component.MeowSliderRow
 import com.meowmorize.core.designsystem.component.MeowStepper
 import com.meowmorize.core.designsystem.component.MeowSwitchRow
@@ -96,7 +98,8 @@ internal enum class SettingsGroup(
     ALGORITHM("复习算法", "改完下一次评分就生效，不会重算历史"),
     APPEARANCE("外观", "三套信息组织方式，不是简单换色"),
     CALENDAR("日历同步", "把接下来要做的事放进手机日历"),
-    UPDATE("检查更新", "只在你点的时候更新，不会自动下载安装"),
+    UPDATE("检查更新", "应用内下载安装，失败可回退到浏览器"),
+    DATA("数据与备份", "导出 .mmr，换手机前先做一份"),
     ADVANCED("测试工具", "验证遗忘曲线，不用真的等一周"),
 }
 
@@ -117,6 +120,7 @@ internal fun SettingsGroupPage(
         SettingsGroup.APPEARANCE -> AppearancePage(state, viewModel, onBack)
         SettingsGroup.CALENDAR -> CalendarPage(state, viewModel, onToggleCalendarSync, onBack)
         SettingsGroup.UPDATE -> UpdatePage(state, viewModel, onOpenUrl, onBack)
+        SettingsGroup.DATA -> DataPage(state, viewModel, onBack)
         SettingsGroup.ADVANCED -> AdvancedPage(state, viewModel, onBack)
     }
 }
@@ -726,6 +730,9 @@ private fun UpdatePage(
 ) {
     val settings = state.settings
     val update = state.update
+    val notificationPermission = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { /* 拒绝也不影响页内进度，不必处理 */ }
     PageScaffold(SettingsGroup.UPDATE, onBack) {
         item {
             MeowCard {
@@ -785,10 +792,88 @@ private fun UpdatePage(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Spacer(Modifier.height(12.dp))
-                    MeowPrimaryButton(
-                        text = "去下载",
-                        onClick = { onOpenUrl(available.update.bestUrl) },
-                    )
+
+                    // 优先应用内下载安装；浏览器只作为兜底
+                    when (update.installStatus) {
+                        InstallStatus.DOWNLOADING -> {
+                            LinearProgressIndicator(
+                                progress = { update.installProgress },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = "正在下载 ${(update.installProgress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        InstallStatus.READY -> {
+                            Text(
+                                text = "已下载完成。安装会交给系统界面确认，本应用不会静默安装。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            MeowPrimaryButton(
+                                text = "安装",
+                                onClick = vm::installDownloaded,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        InstallStatus.FAILED -> {
+                            Text(
+                                text = "更新失败：${update.installMessage ?: "未知原因"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                MeowOutlinedButton(
+                                    text = "重试",
+                                    onClick = {
+                                        val url = available.update.downloadUrl
+                                        if (url != null) {
+                                            vm.startUpdateDownload(url, available.update.versionName)
+                                        } else {
+                                            vm.openDownloadInBrowser(available.update.bestUrl)
+                                        }
+                                    },
+                                )
+                                MeowTextButton(
+                                    text = "在浏览器打开",
+                                    onClick = { vm.openDownloadInBrowser(available.update.bestUrl) },
+                                )
+                            }
+                        }
+                        InstallStatus.IDLE -> {
+                            val downloadUrl = available.update.downloadUrl
+                            if (downloadUrl != null) {
+                                MeowPrimaryButton(
+                                    text = "下载并安装",
+                                    onClick = {
+                                        // Android 13+ 的通知权限只为「进度通知」，拒绝也不影响下载
+                                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                            notificationPermission.launch(
+                                                android.Manifest.permission.POST_NOTIFICATIONS,
+                                            )
+                                        }
+                                        vm.startUpdateDownload(downloadUrl, available.update.versionName)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "下载完成后会唤起系统安装器，需要你在系统界面确认",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            MeowTextButton(
+                                text = "在浏览器打开",
+                                onClick = { vm.openDownloadInBrowser(available.update.bestUrl) },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -949,6 +1034,9 @@ internal object SettingsSummary {
         }
     }
 
+    fun data(state: SettingsUiState): String =
+        "${state.backup.counts.subjects} 学科 · ${state.backup.counts.items} 条任务"
+
     fun advanced(state: SettingsUiState): String = if (state.clockShifted) {
         "已偏移 " + String.format(
             java.util.Locale.CHINA,
@@ -1042,6 +1130,75 @@ private fun WallpaperPreview(file: java.io.File?) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+// ---------- 数据与备份 ----------
+
+@Composable
+private fun DataPage(state: SettingsUiState, vm: SettingsViewModel, onBack: () -> Unit) {
+    val backup = state.backup
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
+            "application/octet-stream",
+        ),
+    ) { uri -> uri?.let { vm.exportBackup(it.toString()) } }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { vm.importBackup(it.toString()) } }
+
+    LaunchedEffect(Unit) { vm.loadBackupCounts() }
+
+    PageScaffold(SettingsGroup.DATA, onBack) {
+        item {
+            MeowCard {
+                SectionHeader(
+                    title = "备份与恢复",
+                    subtitle = "换手机、重装、刷机前，请先导出一份",
+                )
+                MeowSettingRow(
+                    title = "当前数据",
+                    value = "${backup.counts.subjects} 学科 · ${backup.counts.items} 条",
+                    description = "全部保存在这台设备上，没有云端副本",
+                )
+                MeowDivider()
+                Spacer(Modifier.height(12.dp))
+                MeowPrimaryButton(
+                    text = if (backup.busy) "处理中…" else "导出 .mmr",
+                    onClick = {
+                        val date = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+                            .format(java.util.Date())
+                        exportLauncher.launch("meowmorize-$date.mmr")
+                    },
+                    enabled = !backup.busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                MeowOutlinedButton(
+                    text = "从 .mmr 导入",
+                    onClick = {
+                        importLauncher.launch(
+                            arrayOf("application/octet-stream", "application/json", "*/*"),
+                        )
+                    },
+                    enabled = !backup.busy,
+                )
+            }
+        }
+
+        item {
+            MeowCard {
+                SectionHeader(title = "关于 .mmr", subtitle = "一个带版本号的 JSON 文件")
+                Text(
+                    text = "导出内容包含：学科、任务（主题 / 背诵内容 / 答案 / 提示 / 截止日期 / " +
+                        "优先级 / 用时），以及每条的记忆进度（稳定性、难度、下次到期时间）。\n\n" +
+                        "不包含复习日志——它是历史明细，体积大且不影响恢复后的排程。\n\n" +
+                        "导入采用**合并**策略：同「学科 + 主题」视为同一条并跳过，不会覆盖你现有数据。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

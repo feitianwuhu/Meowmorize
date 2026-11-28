@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -21,6 +23,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Inventory2
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.meowmorize.core.designsystem.component.MeowOutlinedButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,8 +66,18 @@ fun LibraryRoute(
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val selection by viewModel.selection.collectAsStateWithLifecycle()
     LibraryScreen(
         state = state,
+        selection = selection,
+        onToggleSelection = viewModel::toggleSelection,
+        onClearSelection = viewModel::clearSelection,
+        onSelectAll = viewModel::selectAll,
+        onArchiveSelected = viewModel::archiveSelected,
+        onRestoreSelected = viewModel::restoreSelected,
+        onDeleteSelected = viewModel::deleteSelected,
+        onMoveSelected = viewModel::moveSelectedToSubject,
+        onSetSelectedPriority = viewModel::setSelectedPriority,
         onEditTask = onEditTask,
         onCreateTask = onCreateTask,
         onQueryChange = viewModel::setQuery,
@@ -82,6 +98,15 @@ fun LibraryRoute(
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
+    selection: Set<Long>,
+    onToggleSelection: (Long) -> Unit,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onArchiveSelected: () -> Unit,
+    onRestoreSelected: () -> Unit,
+    onDeleteSelected: () -> Unit,
+    onMoveSelected: (Long?) -> Unit,
+    onSetSelectedPriority: (com.meowmorize.core.model.Priority) -> Unit,
     onEditTask: (Long) -> Unit,
     onCreateTask: () -> Unit,
     onQueryChange: (String) -> Unit,
@@ -99,12 +124,46 @@ fun LibraryScreen(
     modifier: Modifier = Modifier,
 ) {
     val now = Instant.now()
+    val selecting = selection.isNotEmpty()
+    var showMoveDialog by remember { mutableStateOf(false) }
+    var showPriorityDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (selecting) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "已选 ${selection.size} 条",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        MeowTextButton(text = "全选", onClick = onSelectAll)
+                        MeowTextButton(text = "取消", onClick = onClearSelection)
+                    }
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        MeowOutlinedButton(text = "归档", onClick = onArchiveSelected)
+                        MeowOutlinedButton(text = "恢复", onClick = onRestoreSelected)
+                        MeowOutlinedButton(text = "移动", onClick = { showMoveDialog = true })
+                        MeowOutlinedButton(text = "优先级", onClick = { showPriorityDialog = true })
+                        MeowOutlinedButton(
+                            text = "删除",
+                            onClick = { showDeleteDialog = true },
+                            contentColor = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+        }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -222,7 +281,11 @@ fun LibraryScreen(
                 LibraryItemCard(
                     ui = ui,
                     now = now,
-                    onClick = { onEditTask(ui.item.id) },
+                    selected = ui.item.id in selection,
+                    onClick = {
+                        if (selecting) onToggleSelection(ui.item.id) else onEditTask(ui.item.id)
+                    },
+                    onLongClick = { onToggleSelection(ui.item.id) },
                     onArchive = { onArchive(ui.item.id) },
                     onRestore = { onRestore(ui.item.id) },
                     onDelete = { onDeleteItem(ui.item.id, ui.item.topic) },
@@ -231,6 +294,96 @@ fun LibraryScreen(
                 )
             }
         }
+    }
+
+    if (showMoveDialog) {
+        AlertDialog(
+            onDismissRequest = { showMoveDialog = false },
+            title = { Text("移动到学科") },
+            text = {
+                Column {
+                    Text(
+                        text = "未分类",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onMoveSelected(null)
+                                showMoveDialog = false
+                            }
+                            .padding(vertical = 12.dp),
+                    )
+                    state.subjects.forEach { subject ->
+                        Text(
+                            text = subject.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onMoveSelected(subject.id)
+                                    showMoveDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMoveDialog = false }) { Text("取消") }
+            },
+        )
+    }
+
+    if (showPriorityDialog) {
+        AlertDialog(
+            onDismissRequest = { showPriorityDialog = false },
+            title = { Text("设置优先级") },
+            text = {
+                Column {
+                    listOf(
+                        com.meowmorize.core.model.Priority.LOW to "低",
+                        com.meowmorize.core.model.Priority.NORMAL to "普通",
+                        com.meowmorize.core.model.Priority.HIGH to "高",
+                    ).forEach { (priority, label) ->
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSetSelectedPriority(priority)
+                                    showPriorityDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPriorityDialog = false }) { Text("取消") }
+            },
+        )
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("删除 ${selection.size} 条任务？") },
+            text = {
+                Text("内容、记忆进度与复习记录会一并清除，无法恢复。只想暂时收起的话请用「归档」。")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteSelected()
+                        showDeleteDialog = false
+                    },
+                ) { Text("删除", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
+            },
+        )
     }
 
     if (state.subjectManagerVisible) {
@@ -349,7 +502,9 @@ private fun FilterChip(
 private fun LibraryItemCard(
     ui: LibraryItemUi,
     now: Instant,
+    selected: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onArchive: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit,
@@ -361,6 +516,12 @@ private fun LibraryItemCard(
     MeowCard(
         modifier = modifier.alpha(if (archived) 0.65f else 1f),
         onClick = onClick,
+        onLongClick = onLongClick,
+        borderColor = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.outline
+        },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SubjectDot(color = subjectColor)
