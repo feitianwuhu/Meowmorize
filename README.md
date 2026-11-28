@@ -423,7 +423,7 @@ desugaring，从机制上把 `java.time` / `java.util` 的新增量统一降级�
 
 ## 七、构建与运行
 
-环境：**JDK 21**（AGP 9 的要求）、Android SDK 37、Gradle 9.9.1、AGP 9.5.1。
+环境：**JDK 21**（AGP 9 的要求）、Android SDK 37、Gradle 9.9.1、AGP 9.5.2。
 APK 内含**自带中文 OCR 模型**（约 20MB），这是为了让无 GMS 的国产设备也能「拍照取字」；
 如果只需要手动录入，可以移除 `mlkit-text-recognition-chinese` 依赖把包体积降回去。
 
