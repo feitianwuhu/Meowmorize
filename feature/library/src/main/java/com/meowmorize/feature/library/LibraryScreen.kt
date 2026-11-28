@@ -1,5 +1,21 @@
 package com.meowmorize.feature.library
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.rotate
+import com.meowmorize.core.designsystem.motion.MeowMotion
+import com.meowmorize.core.designsystem.motion.meowTween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -128,67 +144,62 @@ fun LibraryScreen(
     var showMoveDialog by remember { mutableStateOf(false) }
     var showPriorityDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    // 折叠状态跨重组保留；默认收起，否则筛选区会把列表挤得只剩几行
+    var filtersExpanded by rememberSaveable { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (selecting) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "已选 ${selection.size} 条",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f),
-                        )
-                        MeowTextButton(text = "全选", onClick = onSelectAll)
-                        MeowTextButton(text = "取消", onClick = onClearSelection)
-                    }
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        MeowOutlinedButton(text = "归档", onClick = onArchiveSelected)
-                        MeowOutlinedButton(text = "恢复", onClick = onRestoreSelected)
-                        MeowOutlinedButton(text = "移动", onClick = { showMoveDialog = true })
-                        MeowOutlinedButton(text = "优先级", onClick = { showPriorityDialog = true })
-                        MeowOutlinedButton(
-                            text = "删除",
-                            onClick = { showDeleteDialog = true },
-                            contentColor = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
-            }
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "任务库",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = "${state.activeCount} 条在学 · ${state.items.size} 条当前显示",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                MeowIconButton(
-                    icon = Icons.Rounded.Add,
-                    contentDescription = "新增任务",
-                    onClick = onCreateTask,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    tint = MaterialTheme.colorScheme.onPrimary,
+    // 进入多选时自动收起筛选面板：两块常驻区叠起来，列表就没地方了
+    LaunchedEffect(selecting) {
+        if (selecting) filtersExpanded = false
+    }
+
+    // 折叠时也要看得出「现在筛了什么」，否则用户会以为列表莫名其妙变少了
+    val activeSubjectName = state.subjects
+        .firstOrNull { it.id == state.selectedSubjectId }?.name
+    val filtersSummary = listOfNotNull(
+        activeSubjectName,
+        state.sortOrder.takeIf { it != TaskSortOrder.RECENT_UPDATED }?.displayName(),
+        "含归档".takeIf { state.showArchived },
+    ).joinToString(" · ")
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // ===== 常驻区：搜索、筛选、批量操作都不随列表滚动 =====
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, top = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (selecting) {
+                // 多选时用选择头替换标题行：位置不跳、还能少占一行高度
+                SelectionHeader(
+                    count = selection.size,
+                    onSelectAll = onSelectAll,
+                    onClearSelection = onClearSelection,
                 )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "任务库",
+                            style = MaterialTheme.typography.displaySmall,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = "${state.activeCount} 条在学 · ${state.items.size} 条当前显示",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    MeowIconButton(
+                        icon = Icons.Rounded.Add,
+                        contentDescription = "新增任务",
+                        onClick = onCreateTask,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
             }
-        }
 
-        item {
             MeowTextField(
                 value = state.query,
                 onValueChange = onQueryChange,
@@ -196,102 +207,133 @@ fun LibraryScreen(
                 placeholder = "主题、内容或来源",
                 imeAction = androidx.compose.ui.text.input.ImeAction.Search,
             )
-        }
 
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    FilterChip(
-                        text = "全部",
-                        selected = state.selectedSubjectId == null,
-                        onClick = { onSelectSubject(null) },
-                    )
-                }
-                items(state.subjects, key = { it.id }) { subject ->
-                    FilterChip(
-                        text = subject.name,
-                        selected = state.selectedSubjectId == subject.id,
-                        color = Color(subject.colorArgb),
-                        onClick = { onSelectSubject(subject.id) },
-                    )
-                }
-                item {
-                    FilterChip(
-                        text = "管理学科",
-                        selected = false,
-                        onClick = onManageSubjects,
-                    )
-                }
-            }
-        }
+            FilterToggle(
+                expanded = filtersExpanded,
+                summary = filtersSummary.ifBlank { null },
+                onClick = { filtersExpanded = !filtersExpanded },
+            )
 
-        item {
-            Column {
-                Text(
-                    text = "排序",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
-                )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(TaskSortOrder.entries.toList(), key = { it.name }) { order ->
-                        FilterChip(
-                            text = order.displayName(),
-                            selected = state.sortOrder == order,
-                            color = MaterialTheme.colorScheme.secondary,
-                            onClick = { onSelectSort(order) },
+            AnimatedVisibility(
+                visible = filtersExpanded,
+                enter = fadeIn(meowTween(MeowMotion.FAST)) +
+                    expandVertically(animationSpec = meowTween(MeowMotion.ENTER, MeowMotion.easeOut)),
+                exit = fadeOut(meowTween(MeowMotion.PRESS)) +
+                    shrinkVertically(animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut)),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            FilterChip(
+                                text = "全部",
+                                selected = state.selectedSubjectId == null,
+                                onClick = { onSelectSubject(null) },
+                            )
+                        }
+                        items(state.subjects, key = { it.id }) { subject ->
+                            FilterChip(
+                                text = subject.name,
+                                selected = state.selectedSubjectId == subject.id,
+                                color = Color(subject.colorArgb),
+                                onClick = { onSelectSubject(subject.id) },
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                text = "管理学科",
+                                selected = false,
+                                onClick = onManageSubjects,
+                            )
+                        }
+                    }
+
+                    Column {
+                        Text(
+                            text = "排序",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+                        )
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(TaskSortOrder.entries.toList(), key = { it.name }) { order ->
+                                FilterChip(
+                                    text = order.displayName(),
+                                    selected = state.sortOrder == order,
+                                    color = MaterialTheme.colorScheme.secondary,
+                                    onClick = { onSelectSort(order) },
+                                )
+                            }
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = if (state.showArchived) "含已归档" else "仅显示在学",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                        )
+                        MeowTextButton(
+                            text = if (state.showArchived) "隐藏归档" else "显示归档",
+                            onClick = onToggleArchived,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
-        }
 
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = if (state.showArchived) "含已归档" else "仅显示在学",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+            if (selecting) {
+                BatchActionRow(
+                    onArchive = onArchiveSelected,
+                    onRestore = onRestoreSelected,
+                    onMove = { showMoveDialog = true },
+                    onPriority = { showPriorityDialog = true },
+                    onDelete = { showDeleteDialog = true },
                 )
-                MeowTextButton(
-                    text = if (state.showArchived) "隐藏归档" else "显示归档",
-                    onClick = onToggleArchived,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            } else if (state.items.isNotEmpty()) {
+                // 提示贴着列表（常驻区最后一行）：它说的就是下面这块内容
+                LongPressHint()
             }
         }
 
-        if (state.items.isEmpty()) {
-            item {
-                EmptyState(
-                    icon = Icons.Rounded.Inventory2,
-                    title = if (state.query.isBlank()) "这里还没有内容" else "没有匹配的内容",
-                    description = if (state.query.isBlank()) {
-                        "添加第一条背诵任务，之后每天由算法安排复习。"
-                    } else {
-                        "换个关键词，或者清除筛选条件试试。"
-                    },
-                    actionLabel = if (state.query.isBlank()) "新增背诵任务" else null,
-                    onAction = if (state.query.isBlank()) onCreateTask else null,
-                )
-            }
-        } else {
-            items(state.items, key = { it.item.id }) { ui ->
-                LibraryItemCard(
-                    ui = ui,
-                    now = now,
-                    selected = ui.item.id in selection,
-                    onClick = {
-                        if (selecting) onToggleSelection(ui.item.id) else onEditTask(ui.item.id)
-                    },
-                    onLongClick = { onToggleSelection(ui.item.id) },
-                    onArchive = { onArchive(ui.item.id) },
-                    onRestore = { onRestore(ui.item.id) },
-                    onDelete = { onDeleteItem(ui.item.id, ui.item.topic) },
-                    // 删除/排序后让行位移有动画，避免列表「跳一下」
-                    modifier = Modifier.animateItem(),
-                )
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (state.items.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = Icons.Rounded.Inventory2,
+                        title = if (state.query.isBlank()) "这里还没有内容" else "没有匹配的内容",
+                        description = if (state.query.isBlank()) {
+                            "添加第一条背诵任务，之后每天由算法安排复习。"
+                        } else {
+                            "换个关键词，或者清除筛选条件试试。"
+                        },
+                        actionLabel = if (state.query.isBlank()) "新增背诵任务" else null,
+                        onAction = if (state.query.isBlank()) onCreateTask else null,
+                    )
+                }
+            } else {
+                items(state.items, key = { it.item.id }) { ui ->
+                    LibraryItemCard(
+                        ui = ui,
+                        now = now,
+                        selected = ui.item.id in selection,
+                        onClick = {
+                            if (selecting) onToggleSelection(ui.item.id) else onEditTask(ui.item.id)
+                        },
+                        onLongClick = { onToggleSelection(ui.item.id) },
+                        onArchive = { onArchive(ui.item.id) },
+                        onRestore = { onRestore(ui.item.id) },
+                        onDelete = { onDeleteItem(ui.item.id, ui.item.topic) },
+                        // 删除/排序后让行位移有动画，避免列表「跳一下」
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
         }
     }
@@ -467,6 +509,144 @@ fun LibraryScreen(
                 TextButton(onClick = onCancelDelete) { Text("取消") }
             },
             shape = RoundedCornerShape(26.dp),
+        )
+    }
+}
+
+/** 多选时的头部：替换标题行，高度基本不变，列表不会跳。 */
+@Composable
+private fun SelectionHeader(
+    count: Int,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = "已选 $count 条",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        MeowTextButton(text = "全选", onClick = onSelectAll)
+        MeowTextButton(text = "取消", onClick = onClearSelection)
+    }
+}
+
+/**
+ * 批量操作行。
+ *
+ * 常驻在筛选区下方、列表上方：选了任务就一直看得见，不会因为滑动而消失。
+ * 五个按钮在窄屏放不下，所以允许横向滚动，而不是换行把头部撑高。
+ */
+@Composable
+private fun BatchActionRow(
+    onArchive: () -> Unit,
+    onRestore: () -> Unit,
+    onMove: () -> Unit,
+    onPriority: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        MeowOutlinedButton(text = "归档", onClick = onArchive)
+        MeowOutlinedButton(text = "恢复", onClick = onRestore)
+        MeowOutlinedButton(text = "移动", onClick = onMove)
+        MeowOutlinedButton(text = "优先级", onClick = onPriority)
+        MeowOutlinedButton(
+            text = "删除",
+            onClick = onDelete,
+            contentColor = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+/**
+ * 「筛选与排序」开关。
+ *
+ * 做成整条：点哪儿都能展开，也留得住右侧的箭头做状态指示；
+ * 收起时把当前条件摘要写在中间，避免用户忘了筛选还开着。
+ */
+@Composable
+private fun FilterToggle(
+    expanded: Boolean,
+    summary: String?,
+    onClick: () -> Unit,
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val chevron by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = meowTween(MeowMotion.FAST, MeowMotion.easeOut),
+        label = "filterChevron",
+    )
+    // 展开或有筛选条件时高亮：让「列表被筛过」这件事一直可见
+    val highlighted = expanded || summary != null
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(if (highlighted) accent.copy(alpha = 0.08f) else Color.Transparent)
+            .border(
+                1.dp,
+                if (highlighted) accent.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline,
+                CircleShape,
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Tune,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = if (highlighted) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "筛选与排序",
+            style = MaterialTheme.typography.labelLarge,
+            color = if (highlighted) accent else MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(modifier = Modifier.weight(1f)) {
+            if (summary != null) {
+                Text(
+                    text = summary,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Icon(
+            imageVector = Icons.Rounded.ExpandMore,
+            contentDescription = if (expanded) "收起筛选" else "展开筛选",
+            modifier = Modifier
+                .size(18.dp)
+                .rotate(chevron),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** 长按多选的提示。放在筛选区与列表之间，说的就是下面这块内容。 */
+@Composable
+private fun LongPressHint() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Rounded.TouchApp,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "长按任意任务可多选，批量归档、移动或删除",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
