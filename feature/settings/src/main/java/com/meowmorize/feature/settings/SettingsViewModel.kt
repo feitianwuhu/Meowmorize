@@ -73,6 +73,18 @@ enum class InstallStatus { IDLE, DOWNLOADING, READY, FAILED }
 data class BackupUiState(
     val counts: BackupCounts = BackupCounts(),
     val busy: Boolean = false,
+    /** 已选中文件、等待用户决定「要不要恢复记忆进度」。null 表示没有待确认的导入。 */
+    val pendingImport: PendingImport? = null,
+)
+
+/** 待确认的导入：文件路径 + 其中有哪些东西。 */
+data class PendingImport(
+    val uriString: String,
+    val counts: BackupCounts,
+    /** 文件里是否带有记忆进度；false 时弹窗不提供「恢复进度」选项。 */
+    val hasProgress: Boolean,
+    /** 读取失败时给用户看的原因。 */
+    val error: String? = null,
 )
 
 data class UpdateUiState(
@@ -422,16 +434,19 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun exportBackup(uriString: String) {
+    fun exportBackup(uriString: String, includeProgress: Boolean) {
         viewModelScope.launch {
             backupState.value = backupState.value.copy(busy = true)
-            val result = runCatching { backupRepository.exportTo(uriString) }
+            val result = runCatching { backupRepository.exportTo(uriString, includeProgress) }
             backupState.value = backupState.value.copy(busy = false)
             result
                 .onSuccess { counts ->
                     backupState.value = backupState.value.copy(counts = counts)
                     local.value = local.value.copy(
-                        message = "已导出 ${counts.subjects} 个学科 / ${counts.items} 条任务",
+                        message = buildString {
+                            append("已导出 ${counts.subjects} 个学科 / ${counts.items} 条任务")
+                            append(if (includeProgress) "（含记忆进度）" else "（不含记忆进度）")
+                        },
                     )
                 }
                 .onFailure {
@@ -440,20 +455,82 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun importBackup(uriString: String) {
+    /**
+     * 选中文件后先读一眼，不落库。
+     *
+     * 必须在导入前问一次「要不要恢复记忆进度」：同一个文件，可能这次想要完整恢复，
+     * 下次只想拿内容当新任务。这个选择只影响本次导入，不做成持久设置。
+     */
+    fun prepareImport(uriString: String) {
         viewModelScope.launch {
             backupState.value = backupState.value.copy(busy = true)
-            val result = runCatching { backupRepository.importFrom(uriString) }
+            val result = runCatching { backupRepository.peek(uriString) }
+            backupState.value = backupState.value.copy(busy = false)
+            result
+                .onSuccess { preview ->
+                    backupState.value = backupState.value.copy(
+                        pendingImport = PendingImport(
+                            uriString = uriString,
+                            counts = preview.counts,
+                            hasProgress = preview.hasProgress,
+                            // 空文件不算「成功但导了 0 条」，直接告诉用户里面没东西
+                            error = if (preview.counts.items == 0) {
+                                "这份备份里没有任务，不需要导入"
+                            } else {
+                                null
+                            },
+                        ),
+                    )
+                }
+                .onFailure {
+                    // 读不出来（格式不对 / 版本更高）也在同一个弹窗里说清楚，避免「点了没反应」
+                    backupState.value = backupState.value.copy(
+                        pendingImport = PendingImport(
+                            uriString = uriString,
+                            counts = BackupCounts(),
+                            hasProgress = false,
+                            error = it.message ?: "无法读取该文件",
+                        ),
+                    )
+                }
+        }
+    }
+
+    /** 用户在弹窗里做了选择：恢复进度 / 只导入任务。 */
+    fun confirmImport(withProgress: Boolean) {
+        val pending = backupState.value.pendingImport ?: return
+        if (pending.error != null) {
+            dismissImport()
+            return
+        }
+        backupState.value = backupState.value.copy(pendingImport = null, busy = true)
+        viewModelScope.launch {
+            val result = runCatching { backupRepository.importFrom(pending.uriString, withProgress) }
             backupState.value = backupState.value.copy(busy = false)
             result
                 .onSuccess { summary ->
+                    // 导入进来的任务要立刻参与排程，否则「导完却什么都没变」。
+                    // 重排失败不影响导入本身，所以只吞掉异常。
+                    val replanned = if (summary.items > 0) {
+                        runCatching { prepareTodayPlan(force = true) }.isSuccess
+                    } else {
+                        false
+                    }
                     val counts = runCatching { backupRepository.counts() }.getOrNull()
                     if (counts != null) backupState.value = backupState.value.copy(counts = counts)
                     local.value = local.value.copy(
                         message = buildString {
                             append("已导入 ${summary.items} 条任务")
                             if (summary.subjects > 0) append("、${summary.subjects} 个学科")
+                            when {
+                                summary.progressRestored > 0 ->
+                                    append("（${summary.progressRestored} 条含记忆进度）")
+                                withProgress ->
+                                    append("（文件里没有记忆进度，按新任务导入）")
+                                else -> append("（作为新任务）")
+                            }
                             if (summary.skipped > 0) append("；跳过 ${summary.skipped} 条重复")
+                            if (replanned) append("；今日计划已更新")
                         },
                     )
                 }
@@ -461,6 +538,10 @@ class SettingsViewModel @Inject constructor(
                     local.value = local.value.copy(message = "导入失败：${it.message ?: "未知原因"}")
                 }
         }
+    }
+
+    fun dismissImport() {
+        backupState.value = backupState.value.copy(pendingImport = null)
     }
 
     // ---------- 检查更新 ----------

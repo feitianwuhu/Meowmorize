@@ -28,6 +28,9 @@ import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Weekend
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -1139,14 +1142,21 @@ private fun WallpaperPreview(file: java.io.File?) {
 @Composable
 private fun DataPage(state: SettingsUiState, vm: SettingsViewModel, onBack: () -> Unit) {
     val backup = state.backup
+    val pending = backup.pendingImport
+
+    // 导出选项：先在这里问清楚，再打开系统保存框。
+    // 做成一次性选择而不是持久设置——同一个文件可能这次要完整恢复、下次只想拿内容。
+    var showExportDialog by remember { mutableStateOf(false) }
+    var includeProgress by remember { mutableStateOf(true) }
+
     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
             "application/octet-stream",
         ),
-    ) { uri -> uri?.let { vm.exportBackup(it.toString()) } }
+    ) { uri -> uri?.let { vm.exportBackup(it.toString(), includeProgress) } }
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
-    ) { uri -> uri?.let { vm.importBackup(it.toString()) } }
+    ) { uri -> uri?.let { vm.prepareImport(it.toString()) } }
 
     LaunchedEffect(Unit) { vm.loadBackupCounts() }
 
@@ -1166,11 +1176,7 @@ private fun DataPage(state: SettingsUiState, vm: SettingsViewModel, onBack: () -
                 Spacer(Modifier.height(12.dp))
                 MeowPrimaryButton(
                     text = if (backup.busy) "处理中…" else "导出 .mmr",
-                    onClick = {
-                        val date = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
-                            .format(java.util.Date())
-                        exportLauncher.launch("meowmorize-$date.mmr")
-                    },
+                    onClick = { showExportDialog = true },
                     enabled = !backup.busy,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -1191,14 +1197,131 @@ private fun DataPage(state: SettingsUiState, vm: SettingsViewModel, onBack: () -
             MeowCard {
                 SectionHeader(title = "关于 .mmr", subtitle = "一个带版本号的 JSON 文件")
                 Text(
-                    text = "导出内容包含：学科、任务（主题 / 背诵内容 / 答案 / 提示 / 截止日期 / " +
-                        "优先级 / 用时），以及每条的记忆进度（稳定性、难度、下次到期时间）。\n\n" +
+                    // 这里是普通 Text，不解析 Markdown：不要写 ** 标记，否则会原样显示星号
+                    text = "文件里包含：学科、任务（主题 / 背诵内容 / 答案 / 提示 / 截止日期 / " +
+                        "优先级 / 用时），以及可选的记忆进度（稳定性、难度、下次到期时间）。\n\n" +
+                        "记忆进度两头都可选：导出时可以不带，导入时也可以忽略。" +
+                        "任意一头选择「不要」，导入后的任务就等同于新建任务，从今天开始安排。\n\n" +
                         "不包含复习日志——它是历史明细，体积大且不影响恢复后的排程。\n\n" +
-                        "导入采用**合并**策略：同「学科 + 主题」视为同一条并跳过，不会覆盖你现有数据。",
+                        "导入采用「合并」策略：同「学科 + 主题」视为同一条并跳过，不会覆盖你现有数据。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
+    }
+
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text("导出备份") },
+            text = {
+                Column {
+                    Text(
+                        text = "${backup.counts.subjects} 个学科 · ${backup.counts.items} 条任务",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    MeowSwitchRow(
+                        title = "包含记忆进度",
+                        description = "带上每条的下次到期时间与难度。" +
+                            "关掉后文件更小，导入方只能拿到新任务",
+                        checked = includeProgress,
+                        onCheckedChange = { includeProgress = it },
+                    )
+                    Text(
+                        text = if (includeProgress) {
+                            "导入方仍可选择忽略进度，只取内容。"
+                        } else {
+                            "导入后与新任务无区别，从今天开始重新安排。"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                MeowTextButton(
+                    text = "导出",
+                    onClick = {
+                        showExportDialog = false
+                        val date = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US)
+                            .format(java.util.Date())
+                        exportLauncher.launch("meowmorize-$date.mmr")
+                    },
+                )
+            },
+            dismissButton = {
+                MeowTextButton(text = "取消", onClick = { showExportDialog = false })
+            },
+        )
+    }
+
+    pending?.let { request ->
+        // 每个文件单独记一次选择：换了文件不该沿用上次的勾选
+        var restoreProgress by remember(request.uriString) { mutableStateOf(true) }
+
+        AlertDialog(
+            onDismissRequest = { vm.dismissImport() },
+            title = { Text(if (request.error != null) "无法导入" else "导入备份") },
+            text = {
+                if (request.error != null) {
+                    Text(
+                        text = request.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Column {
+                        Text(
+                            text = "${request.counts.subjects} 个学科 · ${request.counts.items} 条任务",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (request.hasProgress) {
+                            MeowSwitchRow(
+                                title = "恢复记忆进度",
+                                description = "关掉则只取任务内容，导入后与新任务无区别",
+                                checked = restoreProgress,
+                                onCheckedChange = { restoreProgress = it },
+                            )
+                        } else {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = "这份备份不含记忆进度，导入后全部是新任务。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (request.counts.items > 0) {
+                            Text(
+                                text = "同「学科 + 主题」的已有任务会跳过，不覆盖现有数据。",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 10.dp),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (request.error != null) {
+                    MeowTextButton(text = "知道了", onClick = { vm.dismissImport() })
+                } else {
+                    MeowTextButton(
+                        text = "导入",
+                        onClick = {
+                            // 文件里没有进度时，勾选状态无意义，一律按 false 传
+                            vm.confirmImport(request.hasProgress && restoreProgress)
+                        },
+                    )
+                }
+            },
+            dismissButton = if (request.error != null) {
+                null
+            } else {
+                { MeowTextButton(text = "取消", onClick = { vm.dismissImport() }) }
+            },
+        )
     }
 }
